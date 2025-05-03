@@ -426,26 +426,6 @@ func (t *Table) renderDataToDescBorder() string {
 	return sb.String()
 }
 
-// renderDescToDataBorder renders the border between a description and the next data row
-// Uses TopT (┬) for column separators instead of Cross (┼)
-func (t *Table) renderDescToDataBorder() string {
-	var sb strings.Builder
-	sb.WriteString(LeftT)
-
-	// Draw a continuous line across the entire width with TopT at column positions
-	for i, w := range t.columnWidths {
-		sb.WriteString(strings.Repeat(HLine, w+2))
-
-		// Add separator if not the last column
-		if i < len(t.columnWidths)-1 {
-			sb.WriteString(TopT) // Use TopT (┬) instead of Cross (┼)
-		}
-	}
-
-	sb.WriteString(RightT + "\n")
-	return sb.String()
-}
-
 // renderLastRowBottomBorder renders the bottom border for the last row when it has a description
 // Uses continuous HLine (─) with no column separators
 func (t *Table) renderLastRowBottomBorder() string {
@@ -495,7 +475,7 @@ func (t *Table) renderDescriptionRow(text string, isFirstLine bool) string {
 	sb.WriteString(VLine)
 
 	if isFirstLine {
-		prefix := " [ Notes ] "
+		prefix := ""
 		sb.WriteString(prefix)
 
 		// Calculate remaining space and padding
@@ -856,25 +836,11 @@ func RapidFortTable(headers []string) *Table {
 
 // Finally, update the Render method to use our new functions
 
-// Render the table to a string
+// Render method with correct border management for merged descriptions
 func (t *Table) Render() string {
-	// If part of a group, the group will handle column width calculations
 	if t.group == nil {
-		// Use detected terminal width for calculations
 		t.calculateOptimalColumnWidths(t.consoleWidth)
 	}
-
-	// 	// The rest of the render method remains the same...
-	// 	// Your existing Render code here
-	// }
-
-	// // Render the table to a string
-	// func (t *Table) Render() string {
-	// 	// If part of a group, the group will handle column width calculations
-	// 	if t.group == nil {
-	// 		t.calculateInitialColumnWidths()
-	// 		t.adjustColumnWidthsToFit()
-	// 	}
 
 	var sb strings.Builder
 
@@ -933,63 +899,187 @@ func (t *Table) Render() string {
 			sb.WriteString("\n")
 		}
 
-		// If there's a description for this row
+		// Check for description
 		if desc, ok := t.Descriptions[ri]; ok {
-			// Add special separator for data-to-description transition
-			sb.WriteString(t.renderDataToDescBorder())
-
-			// Wrap and split the description text
+			// Process the description
 			bulletPoints := strings.Split(desc, "\n")
 			if len(bulletPoints) == 1 && strings.Contains(desc, ",") {
-				// If no newlines but has commas, split by commas
 				bulletPoints = strings.Split(desc, ",")
-				for i, bp := range bulletPoints {
-					bulletPoints[i] = strings.TrimSpace(bp)
+				for i := range bulletPoints {
+					bulletPoints[i] = strings.TrimSpace(bulletPoints[i])
 				}
 			}
 
-			// Add description header
-			sb.WriteString(t.renderDescriptionRow("", true))
+			// Calculate merged width (columns 2-n)
+			mergedWidth := 0
+			for i := 1; i < len(t.columnWidths); i++ {
+				mergedWidth += t.columnWidths[i] + 2
+				if i < len(t.columnWidths)-1 {
+					mergedWidth += 1 // Add separator space
+				}
+			}
 
-			// Add each bullet point
+			// Render the border that merges columns 2-n
+			sb.WriteString(VLine)
+			sb.WriteString(t.formatCellContent("", 0))
+			sb.WriteString(LeftT)
+
+			// Draw border for all merged columns
+			for i := 1; i < len(t.columnWidths); i++ {
+				sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
+				if i < len(t.columnWidths)-1 {
+					// Use BottomT to "absorb" the column separator
+					sb.WriteString(BottomT)
+				}
+			}
+			sb.WriteString(RightT)
+			sb.WriteString("\n")
+
+			// Render notes section
+			sb.WriteString(VLine)
+			sb.WriteString(t.formatCellContent("", 0)) // Empty first column
+			sb.WriteString(VLine)
+			notesHeader := "   [ Notes ]"
+			paddingSpace := mergedWidth - utf8.RuneCountInString(notesHeader)
+			sb.WriteString(notesHeader)
+			sb.WriteString(strings.Repeat(" ", paddingSpace))
+			sb.WriteString(VLine)
+			sb.WriteString("\n")
+
+			// Render bullet points
 			for _, bp := range bulletPoints {
 				bp = strings.TrimSpace(bp)
 				if bp != "" {
-					// Wrap long bullet points
-					wrappedLines := t.wrapDescriptionText(bp)
-					for _, line := range wrappedLines {
-						sb.WriteString(t.renderDescriptionRow(line, false))
+					bulletLine := "   • " + bp
+					wrappedLines := t.smartSplitByWords(bulletLine, mergedWidth-4)
+
+					for _, wrappedLine := range wrappedLines {
+						sb.WriteString(VLine)
+						sb.WriteString(t.formatCellContent("", 0)) // Empty first column
+						sb.WriteString(VLine)
+
+						paddingSpace := mergedWidth - utf8.RuneCountInString(wrappedLine)
+						sb.WriteString(wrappedLine)
+						sb.WriteString(strings.Repeat(" ", paddingSpace))
+						sb.WriteString(VLine)
+						sb.WriteString("\n")
 					}
 				}
 			}
 
-			// If this is the last row, add special bottom border for description
-			if ri == len(t.Rows)-1 {
-				sb.WriteString(t.renderLastRowBottomBorder())
-				return sb.String() // Return early since we've added the bottom border
+			// Check if last row and if next row has description
+			isLastRow := ri == len(t.Rows)-1
+			nextHasDesc := false
+			if !isLastRow {
+				if _, ok := t.Descriptions[ri+1]; ok {
+					nextHasDesc = true
+				}
 			}
 
-			// If not the last row, add special separator for description-to-data transition
-			sb.WriteString(t.renderDescToDataBorder())
-			continue
-		}
+			// Render appropriate border after description
+			if isLastRow {
+				// Last row with description - properly render bottom border
+				sb.WriteString(BottomLeft)
+				sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
+				sb.WriteString(BottomT)
+				sb.WriteString(strings.Repeat(HLine, mergedWidth))
+				sb.WriteString(BottomRight)
+				sb.WriteString("\n")
+			} else if nextHasDesc {
+				// Next row has description - special handling
+				sb.WriteString(VLine)
+				sb.WriteString(t.formatCellContent("", 0))
+				sb.WriteString(LeftT)
 
-		// If this is not the last row and it doesn't have a description, add normal middle border
-		if ri < len(t.Rows)-1 {
-			sb.WriteString(t.renderMiddleBorder())
+				// Use HLine for the merged part, TopT for where columns will split
+				for i := 1; i < len(t.columnWidths); i++ {
+					sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
+					if i < len(t.columnWidths)-1 {
+						sb.WriteString(TopT) // Columns will split at these positions
+					}
+				}
+				sb.WriteString(RightT)
+				sb.WriteString("\n")
+			} else {
+				// Next row is normal data - use Cross for normal separator
+				sb.WriteString(LeftT)
+				sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
+				sb.WriteString(Cross)
+
+				for i := 1; i < len(t.columnWidths); i++ {
+					sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
+					if i < len(t.columnWidths)-1 {
+						sb.WriteString(Cross)
+					}
+				}
+				sb.WriteString(RightT)
+				sb.WriteString("\n")
+			}
+		} else {
+			// No description - add separator if not last row
+			if ri < len(t.Rows)-1 {
+				sb.WriteString(t.renderMiddleBorder())
+			}
 		}
 	}
 
-	// Bottom border (only reached if the last row doesn't have a description)
-	sb.WriteString(t.renderBottomBorder())
+	// Bottom border (only if last row has no description)
+	if _, ok := t.Descriptions[len(t.Rows)-1]; !ok {
+		sb.WriteString(t.renderBottomBorder())
+	}
 
 	return sb.String()
 }
 
-// detectWidth returns the current terminal width (or 80 if it can't detect one)
-func detectWidth() int {
-	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
-		return w
+// Render a line of description text
+func (t *Table) renderDescriptionLine(sb *strings.Builder, text string, mergedWidth int) {
+	sb.WriteString(VLine)
+	sb.WriteString(t.formatCellContent("", 0)) // Empty first column
+	sb.WriteString(VLine)
+
+	paddingSpace := mergedWidth - utf8.RuneCountInString(text) - 2
+	sb.WriteString(" ")
+	sb.WriteString(text)
+	sb.WriteString(strings.Repeat(" ", paddingSpace))
+	sb.WriteString(" ")
+	sb.WriteString(VLine)
+	sb.WriteString("\n")
+}
+
+// Render border from description to normal data row
+func (t *Table) renderDescToDataBorder(sb *strings.Builder) {
+	sb.WriteString(LeftT)
+	sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
+	sb.WriteString(Cross)
+
+	for i := 1; i < len(t.columnWidths); i++ {
+		sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
+		if i < len(t.columnWidths)-1 {
+			sb.WriteString(Cross)
+		}
 	}
-	return 80
+	sb.WriteString(RightT)
+	sb.WriteString("\n")
+}
+
+// Helper method to render border after a description (going back to normal data row)
+func (t *Table) renderDataToDataBorderAfterDesc() string {
+	var sb strings.Builder
+	sb.WriteString(LeftT)
+
+	// First column
+	sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
+	sb.WriteString(Cross)
+
+	// Rest of columns normally
+	for i := 1; i < len(t.columnWidths); i++ {
+		sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
+		if i < len(t.columnWidths)-1 {
+			sb.WriteString(Cross)
+		}
+	}
+
+	sb.WriteString(RightT)
+	sb.WriteString("\n")
+	return sb.String()
 }
