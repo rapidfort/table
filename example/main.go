@@ -7,27 +7,51 @@ import (
 )
 
 func main() {
-	// Create a new table with headers matching your example
-	headers := []string{"#", "CVE ID", "Severity", "Package", "Installed", "Fixed In"}
-	t := table.RapidFortTable(headers)
+	// Create a table group to manage consistent column widths
+	group := table.NewGroup()
 
-	// Set column alignments (optional)
-	t.SetAlignment(0, "center") // Center the # column
-	t.SetAlignment(2, "center") // Center the Severity column
+	// ---- First Table: High Severity CVEs ----
+	headers1 := []string{"#", "CVE ID", "Severity", "Package", "Installed", "Fixed In"}
+	table1 := table.RapidFortTable(headers1)
 
-	// Add rows for each CVE
-	t.AddRow([]string{"1", "CVE-2024-10041", "MEDIUM", "rf-libpam-modules", "1.7.0-1rfubu1", "RF fixed"})
-	// Add description for the first row
-	t.AddDescription(0, "Fixed in upstream 1.6.0\nKnown issue in PAM's session module add more content here so that we can see how it looks\n\nAdditional note: Ensure to monitor for updates on this issue")
+	// Set column alignments
+	table1.SetAlignment(0, "center") // Center the # column
+	table1.SetAlignment(2, "center") // Center the Severity column
 
-	t.AddRow([]string{"2", "CVE-2024-10963", "MEDIUM", "rf-libpam-modules", "1.7.0-1rfubu1", "RF fixed"})
-	// Add description for the second row
-	t.AddDescription(1, "Patch cherry-picked\nCommit SHA: 940747f8")
+	// Add rows to the first table
+	table1.AddRow([]string{"1", "CVE-2023-48795", "HIGH", "openssh", "8.9p1-3ubuntu0.1", "8.9p1-3ubuntu0.3"})
+	table1.AddDescription(0, "Terrapin attack\nVulnerability in SSH protocol allowing chosen-ciphertext attacks against ChaCha20-Poly1305 and AES-GCM")
 
-	t.AddRow([]string{"3", "CVE-2016-20013", "LOW", "rf-libc-bin", "2.39-0ubuntu8.4", ""})
-	// Add description for the third row with multiple lines
-	t.AddDescription(2, "sha-crypt is O(n²); inherent to algorithm\nNot a glibc vulnerability — apps should limit password length\nAdditional note: Ensure to monitor for updates on this issue")
+	table1.AddRow([]string{"2", "CVE-2023-4863", "HIGH", "libwebp", "1.0.4-3", "1.0.4-3.1"})
+	table1.AddDescription(1, "Heap buffer overflow in WebP library\nOut-of-bounds memory access in VP8L decoding")
 
-	// Render and print the table
-	fmt.Println(t.Render())
+	// Add the first table to the group
+	group.Add(table1)
+
+	// ---- Second Table: Medium Severity CVEs ----
+	headers2 := []string{"#", "CVE ID", "Severity", "Package", "Installed", "Fixed In"}
+	table2 := table.RapidFortTable(headers2)
+
+	// Set column alignments
+	table2.SetAlignment(0, "center") // Center the # column
+	table2.SetAlignment(2, "center") // Center the Severity column
+
+	// Add rows to the second table
+	table2.AddRow([]string{"1", "CVE-2024-10041", "MEDIUM", "libpam-modules", "1.7.0-1", "1.7.0-2"})
+	table2.AddDescription(0, "Fixed in upstream 1.6.0\nKnown issue in PAM's session module")
+
+	table2.AddRow([]string{"2", "CVE-2024-10963", "MEDIUM", "libc-bin", "2.39-0ubuntu8.4", "Pending"})
+	table2.AddDescription(1, "Patch cherry-picked\nCommit SHA: 940747f8")
+
+	// Add the second table to the group
+	group.Add(table2)
+
+	// Synchronize column widths across both tables
+	group.SyncColumnWidths()
+
+	// Render and print both tables
+	fmt.Println("=== HIGH SEVERITY VULNERABILITIES ===")
+	fmt.Println(table1.Render())
+	fmt.Println("\n=== MEDIUM SEVERITY VULNERABILITIES ===")
+	fmt.Println(table2.Render())
 }

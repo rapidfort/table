@@ -99,22 +99,22 @@ func (g *TableGroup) SyncColumnWidths() {
 	}
 }
 
-// New creates a new Table with the given headers
-func RapidFortTable(headers []string) *Table {
-	table := &Table{
-		Headers:      headers,
-		Rows:         [][]string{},
-		Descriptions: make(map[int]string),
-		columnWidths: make([]int, len(headers)),
-		alignments:   make([]string, len(headers)),
-		consoleWidth: detectWidth(), // Auto-detect console width by default
-		maxWidths:    make(map[int]int),
-	}
-	for i := range headers {
-		table.alignments[i] = "left"
-	}
-	return table
-}
+// // New creates a new Table with the given headers
+// func RapidFortTable(headers []string) *Table {
+// 	table := &Table{
+// 		Headers:      headers,
+// 		Rows:         [][]string{},
+// 		Descriptions: make(map[int]string),
+// 		columnWidths: make([]int, len(headers)),
+// 		alignments:   make([]string, len(headers)),
+// 		consoleWidth: detectWidth(), // Auto-detect console width by default
+// 		maxWidths:    make(map[int]int),
+// 	}
+// 	for i := range headers {
+// 		table.alignments[i] = "left"
+// 	}
+// 	return table
+// }
 
 // SetFillWidth sets whether the table should expand to fill the console width
 func (t *Table) SetFillWidth(enabled bool) {
@@ -446,6 +446,27 @@ func (t *Table) renderDescToDataBorder() string {
 	return sb.String()
 }
 
+// renderLastRowBottomBorder renders the bottom border for the last row when it has a description
+// Uses continuous HLine (─) with no column separators
+func (t *Table) renderLastRowBottomBorder() string {
+	var sb strings.Builder
+	sb.WriteString(BottomLeft)
+
+	// Calculate total internal width (all columns + separators)
+	totalWidth := 0
+	for _, w := range t.columnWidths {
+		totalWidth += w + 2 // width + padding on both sides
+	}
+	// Add separators between columns
+	totalWidth += len(t.columnWidths) - 1
+
+	// Draw a continuous line across the entire width with no column separators
+	sb.WriteString(strings.Repeat(HLine, totalWidth))
+
+	sb.WriteString(BottomRight + "\n")
+	return sb.String()
+}
+
 // wrapDescriptionText wraps the description text to fit within the table width
 func (t *Table) wrapDescriptionText(text string) []string {
 	// Calculate available width for the description
@@ -524,13 +545,336 @@ func (t *Table) renderBottomBorder() string {
 	return sb.String()
 }
 
+// // Helper function to check if a row has a description
+// func (t *Table) hasDescription(rowIndex int) bool {
+// 	_, hasDesc := t.Descriptions[rowIndex]
+// 	return hasDesc
+// }
+
+// // Helper function to check if the next row exists and has a description
+// func (t *Table) nextRowHasDescription(rowIndex int) bool {
+// 	if rowIndex+1 >= len(t.Rows) {
+// 		return false
+// 	}
+// 	_, hasDesc := t.Descriptions[rowIndex+1]
+// 	return hasDesc
+// }
+
+// Add these functions to your existing table.go file
+
+// Implementation of dynamic terminal width detection and text wrapping
+
+// detectTerminalWidth gets the current terminal width or returns a default
+func detectTerminalWidth() int {
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || width <= 0 {
+		// Default to 80 if we can't detect terminal width
+		return 80
+	}
+	return width
+}
+
+// calculateOptimalColumnWidths distributes width to each column based on content
+func (t *Table) calculateOptimalColumnWidths(maxWidth int) {
+	// First, get minimum widths needed for each column
+	t.calculateInitialColumnWidths()
+
+	// Calculate total required width
+	totalRequiredWidth := 1 // Start with left border
+	for _, w := range t.columnWidths {
+		// Add column width + padding + separator
+		totalRequiredWidth += w + 2 + 1
+	}
+
+	// If total width exceeds available width, redistribute
+	if totalRequiredWidth > maxWidth {
+		// We need to shrink columns to fit
+		excessWidth := totalRequiredWidth - maxWidth
+		t.shrinkColumnsToFit(excessWidth)
+	} else if t.fillWidth {
+		// We have extra space and fillWidth is true, so expand columns
+		extraWidth := maxWidth - totalRequiredWidth
+		t.expandColumnsToFit(extraWidth)
+	}
+}
+
+// shrinkColumnsToFit reduces column widths to fit within available space
+func (t *Table) shrinkColumnsToFit(excessWidth int) {
+	// Start by reducing the widest columns first
+	for excessWidth > 0 {
+		// Find the widest column that can be shrunk
+		maxWidth, idx := 0, -1
+		for i, w := range t.columnWidths {
+			// Don't shrink below minimum usable width (3 chars)
+			if w > maxWidth && w > 3 {
+				maxWidth, idx = w, i
+			}
+		}
+
+		if idx < 0 {
+			// No more columns can be shrunk, we'll have to live with horizontal scrolling
+			break
+		}
+
+		// Reduce the column width
+		reduceBy := 1
+		if excessWidth > 5 && t.columnWidths[idx] > 10 {
+			// For large excesses, reduce by more to avoid many small reductions
+			reduceBy = excessWidth / 5
+			if reduceBy > (t.columnWidths[idx] - 3) {
+				reduceBy = t.columnWidths[idx] - 3
+			}
+		}
+
+		t.columnWidths[idx] -= reduceBy
+		excessWidth -= reduceBy
+	}
+}
+
+// expandColumnsToFit distributes extra space among columns
+func (t *Table) expandColumnsToFit(extraWidth int) {
+	// Count expandable columns (exclude those with max width constraints)
+	expandableCols := 0
+	for i := range t.columnWidths {
+		if maxWidth, exists := t.maxWidths[i]; !exists || t.columnWidths[i] < maxWidth {
+			expandableCols++
+		}
+	}
+
+	if expandableCols > 0 {
+		perColumn := extraWidth / expandableCols
+		remainder := extraWidth % expandableCols
+
+		expandedCount := 0
+		for i := range t.columnWidths {
+			// Skip columns that have reached their max width
+			if maxWidth, exists := t.maxWidths[i]; exists && t.columnWidths[i] >= maxWidth {
+				continue
+			}
+
+			t.columnWidths[i] += perColumn
+			if expandedCount < remainder {
+				t.columnWidths[i]++
+				expandedCount++
+			}
+
+			// Ensure we don't exceed max width constraints
+			if maxWidth, exists := t.maxWidths[i]; exists && t.columnWidths[i] > maxWidth {
+				t.columnWidths[i] = maxWidth
+			}
+		}
+	}
+}
+
+// wrapCellText wraps text to fit within the column width
+func (t *Table) wrapCellText(text string, colIndex int) []string {
+	maxWidth := t.columnWidths[colIndex]
+
+	// If text is shorter than maxWidth, return as is
+	if utf8.RuneCountInString(text) <= maxWidth {
+		return []string{text}
+	}
+
+	// Handle special cases (URLs, package names, comma-separated lists)
+	if strings.Contains(text, "/") || strings.Contains(text, ".") {
+		return t.smartSplitPackageName(text, maxWidth)
+	}
+	if strings.Contains(text, ",") {
+		return t.smartSplitCommaSeparatedList(text, maxWidth)
+	}
+
+	// Otherwise, split by words
+	return t.smartSplitByWords(text, maxWidth)
+}
+
+// smartSplitPackageName splits package names and URLs at logical boundaries
+func (t *Table) smartSplitPackageName(text string, maxWidth int) []string {
+	parts := strings.Split(text, "/")
+	var result []string
+	currentLine := ""
+
+	for i, part := range parts {
+		// Add slash prefix for all but the first part
+		if i > 0 {
+			part = "/" + part
+		}
+
+		// Check if adding this part would exceed the max width
+		if currentLine != "" && utf8.RuneCountInString(currentLine+part) > maxWidth {
+			// Current line is full, add it to result and start a new one
+			result = append(result, currentLine)
+			currentLine = part
+		} else {
+			// Add to current line
+			currentLine += part
+		}
+
+		// If current line itself exceeds max width, split it further
+		if utf8.RuneCountInString(currentLine) > maxWidth {
+			// Use word splitting as fallback
+			wordSplit := t.smartSplitByWords(currentLine, maxWidth)
+
+			// Add all but the last part to result
+			if len(wordSplit) > 1 {
+				result = append(result, wordSplit[:len(wordSplit)-1]...)
+			}
+
+			// Keep last part as current line
+			currentLine = wordSplit[len(wordSplit)-1]
+		}
+	}
+
+	// Add any remaining text
+	if currentLine != "" {
+		result = append(result, currentLine)
+	}
+
+	return result
+}
+
+// smartSplitCommaSeparatedList splits comma-separated lists at logical boundaries
+func (t *Table) smartSplitCommaSeparatedList(text string, maxWidth int) []string {
+	items := strings.Split(text, ",")
+	var result []string
+	currentLine := ""
+
+	for i, item := range items {
+		item = strings.TrimSpace(item)
+
+		// Add comma prefix for all but the first item
+		if i > 0 {
+			item = ", " + item
+		}
+
+		// Check if adding this item would exceed the max width
+		if currentLine != "" && utf8.RuneCountInString(currentLine+item) > maxWidth {
+			// Current line is full, add it to result and start a new one
+			result = append(result, currentLine)
+			currentLine = strings.TrimPrefix(item, ", ")
+		} else {
+			// Add to current line
+			currentLine += item
+		}
+
+		// If current line itself exceeds max width, split it further
+		if utf8.RuneCountInString(currentLine) > maxWidth {
+			// Use word splitting as fallback
+			wordSplit := t.smartSplitByWords(currentLine, maxWidth)
+
+			// Add all but the last part to result
+			if len(wordSplit) > 1 {
+				result = append(result, wordSplit[:len(wordSplit)-1]...)
+			}
+
+			// Keep last part as current line
+			currentLine = wordSplit[len(wordSplit)-1]
+		}
+	}
+
+	// Add any remaining text
+	if currentLine != "" {
+		result = append(result, currentLine)
+	}
+
+	return result
+}
+
+// smartSplitByWords splits text by words to fit within maxWidth
+func (t *Table) smartSplitByWords(text string, maxWidth int) []string {
+	words := strings.Fields(text)
+	var result []string
+	currentLine := ""
+
+	for _, word := range words {
+		// Check if adding this word would exceed the max width
+		testLine := word
+		if currentLine != "" {
+			testLine = currentLine + " " + word
+		}
+
+		if utf8.RuneCountInString(testLine) <= maxWidth {
+			// Word fits on current line
+			currentLine = testLine
+		} else {
+			// Word doesn't fit, add current line to result and start new one
+			if currentLine != "" {
+				result = append(result, currentLine)
+			}
+
+			// If the word itself is longer than maxWidth, split it
+			if utf8.RuneCountInString(word) > maxWidth {
+				// Split the word into chunks of maxWidth
+				for len(word) > 0 {
+					if utf8.RuneCountInString(word) <= maxWidth {
+						currentLine = word
+						word = ""
+					} else {
+						// Find a good split point (max width characters)
+						result = append(result, word[:maxWidth])
+						word = word[maxWidth:]
+					}
+				}
+			} else {
+				currentLine = word
+			}
+		}
+	}
+
+	// Add any remaining text
+	if currentLine != "" {
+		result = append(result, currentLine)
+	}
+
+	return result
+}
+
+// Now modify the RapidFortTable constructor to use terminal width by default
+
+// RapidFortTable creates a new Table with the given headers
+func RapidFortTable(headers []string) *Table {
+	// Auto-detect terminal width
+	termWidth := detectTerminalWidth()
+
+	table := &Table{
+		Headers:      headers,
+		Rows:         [][]string{},
+		Descriptions: make(map[int]string),
+		columnWidths: make([]int, len(headers)),
+		alignments:   make([]string, len(headers)),
+		consoleWidth: termWidth,
+		fillWidth:    true, // Enable fill width by default
+		maxWidths:    make(map[int]int),
+	}
+
+	// Set default left alignment for all columns
+	for i := range headers {
+		table.alignments[i] = "left"
+	}
+
+	return table
+}
+
+// Finally, update the Render method to use our new functions
+
 // Render the table to a string
 func (t *Table) Render() string {
 	// If part of a group, the group will handle column width calculations
 	if t.group == nil {
-		t.calculateInitialColumnWidths()
-		t.adjustColumnWidthsToFit()
+		// Use detected terminal width for calculations
+		t.calculateOptimalColumnWidths(t.consoleWidth)
 	}
+
+	// 	// The rest of the render method remains the same...
+	// 	// Your existing Render code here
+	// }
+
+	// // Render the table to a string
+	// func (t *Table) Render() string {
+	// 	// If part of a group, the group will handle column width calculations
+	// 	if t.group == nil {
+	// 		t.calculateInitialColumnWidths()
+	// 		t.adjustColumnWidthsToFit()
+	// 	}
 
 	var sb strings.Builder
 
@@ -621,7 +965,7 @@ func (t *Table) Render() string {
 
 			// If this is the last row, add special bottom border for description
 			if ri == len(t.Rows)-1 {
-				sb.WriteString(t.renderBottomDescriptionBorder())
+				sb.WriteString(t.renderLastRowBottomBorder())
 				return sb.String() // Return early since we've added the bottom border
 			}
 
@@ -640,21 +984,6 @@ func (t *Table) Render() string {
 	sb.WriteString(t.renderBottomBorder())
 
 	return sb.String()
-}
-
-// Helper function to check if a row has a description
-func (t *Table) hasDescription(rowIndex int) bool {
-	_, hasDesc := t.Descriptions[rowIndex]
-	return hasDesc
-}
-
-// Helper function to check if the next row exists and has a description
-func (t *Table) nextRowHasDescription(rowIndex int) bool {
-	if rowIndex+1 >= len(t.Rows) {
-		return false
-	}
-	_, hasDesc := t.Descriptions[rowIndex+1]
-	return hasDesc
 }
 
 // detectWidth returns the current terminal width (or 80 if it can't detect one)
