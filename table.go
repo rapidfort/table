@@ -99,23 +99,6 @@ func (g *TableGroup) SyncColumnWidths() {
 	}
 }
 
-// // New creates a new Table with the given headers
-// func RapidFortTable(headers []string) *Table {
-// 	table := &Table{
-// 		Headers:      headers,
-// 		Rows:         [][]string{},
-// 		Descriptions: make(map[int]string),
-// 		columnWidths: make([]int, len(headers)),
-// 		alignments:   make([]string, len(headers)),
-// 		consoleWidth: detectWidth(), // Auto-detect console width by default
-// 		maxWidths:    make(map[int]int),
-// 	}
-// 	for i := range headers {
-// 		table.alignments[i] = "left"
-// 	}
-// 	return table
-// }
-
 // SetFillWidth sets whether the table should expand to fill the console width
 func (t *Table) SetFillWidth(enabled bool) {
 	t.fillWidth = enabled
@@ -936,7 +919,7 @@ func (t *Table) Render() string {
 			sb.WriteString(VLine)
 			sb.WriteString(t.formatCellContent("", 0)) // Empty first column
 			sb.WriteString(VLine)
-			notesHeader := "   [ Notes ]"
+			notesHeader := "[ RF Advisory ]"
 			paddingSpace := mergedWidth - utf8.RuneCountInString(notesHeader)
 			sb.WriteString(notesHeader)
 			sb.WriteString(strings.Repeat(" ", paddingSpace))
