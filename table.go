@@ -231,23 +231,13 @@ func (t *Table) adjustColumnWidthsToFit() {
 	}
 }
 
-// Calculate total width of the table
-func (t *Table) calculateTotalWidth() int {
-	width := 1 // Start with left border
-	for _, w := range t.columnWidths {
-		width += w + 2 + 1 // column width + padding + separator
-	}
-	return width
-}
-
-// smartSplitCellContent intelligently splits cell content
 func (t *Table) smartSplitCellContent(content string, colIndex int) []string {
 	maxWidth := t.columnWidths[colIndex]
 	if utf8.RuneCountInString(content) <= maxWidth {
 		return []string{content}
 	}
 	if strings.Contains(content, "/") || strings.Contains(content, ".") {
-		return t.splitPackageName(content, maxWidth)
+		return t.splitLongString(content, maxWidth)
 	}
 	if strings.Contains(content, ",") {
 		return t.splitCommaSeparatedList(content, maxWidth)
@@ -255,8 +245,7 @@ func (t *Table) smartSplitCellContent(content string, colIndex int) []string {
 	return t.splitByWords(content, maxWidth)
 }
 
-// splitPackageName splits package names and URLs at boundaries
-func (t *Table) splitPackageName(content string, maxWidth int) []string {
+func (t *Table) splitLongString(content string, maxWidth int) []string {
 	parts := strings.Split(content, "/")
 	var res []string
 	line := ""
@@ -352,17 +341,6 @@ func (t *Table) formatCellContent(content string, colIndex int) string {
 	}
 }
 
-// calculateTableWidth returns the total width of the table
-func (t *Table) calculateTableWidth() int {
-	total := 1
-	for _, w := range t.columnWidths {
-		total += w + 2 + 1
-	}
-	return total
-}
-
-// Border renderers
-
 func (t *Table) renderTopBorder() string {
 	var sb strings.Builder
 	sb.WriteString(TopLeft)
@@ -389,109 +367,6 @@ func (t *Table) renderMiddleBorder() string {
 	return sb.String()
 }
 
-// renderDataToDescBorder renders the border between a data row and its description
-// Uses BottomT (┴) for column separators instead of Cross (┼)
-func (t *Table) renderDataToDescBorder() string {
-
-	var sb strings.Builder
-	sb.WriteString(LeftT)
-	sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
-	sb.WriteString(Cross)
-	merged := 0
-	for i := 1; i < len(t.columnWidths); i++ {
-		merged += t.columnWidths[i] + 2
-	}
-	sb.WriteString(strings.Repeat(HLine, merged))
-	sb.WriteString(RightT + "\n")
-	return sb.String()
-}
-
-// renderLastRowBottomBorder renders the bottom border for the last row when it has a description
-// Uses continuous HLine (─) with no column separators
-func (t *Table) renderLastRowBottomBorder() string {
-	var sb strings.Builder
-	sb.WriteString(BottomLeft)
-
-	// Calculate total internal width (all columns + separators)
-	totalWidth := 0
-	for _, w := range t.columnWidths {
-		totalWidth += w + 2 // width + padding on both sides
-	}
-	// Add separators between columns
-	totalWidth += len(t.columnWidths) - 1
-
-	// Draw a continuous line across the entire width with no column separators
-	sb.WriteString(strings.Repeat(HLine, totalWidth))
-
-	sb.WriteString(BottomRight + "\n")
-	return sb.String()
-}
-
-// wrapDescriptionText wraps the description text to fit within the table width
-func (t *Table) wrapDescriptionText(text string) []string {
-	// Calculate available width for the description
-	totalWidth := t.calculateTableWidth() - 4 // Subtract borders and padding
-
-	// If the text contains newlines, split by newlines first
-	if strings.Contains(text, "\n") {
-		var result []string
-		lines := strings.Split(text, "\n")
-		for _, line := range lines {
-			wrapped := t.splitByWords(line, totalWidth)
-			result = append(result, wrapped...)
-		}
-		return result
-	}
-
-	// Otherwise wrap the text to fit the width
-	return t.splitByWords(text, totalWidth)
-}
-
-// renderDescriptionRow renders a description row with proper formatting
-func (t *Table) renderDescriptionRow(text string, isFirstLine bool) string {
-	var sb strings.Builder
-	totalWidth := t.calculateTableWidth() - 2 // Width minus left and right border
-
-	sb.WriteString(VLine)
-
-	if isFirstLine {
-		prefix := ""
-		sb.WriteString(prefix)
-
-		// Calculate remaining space and padding
-		contentWidth := utf8.RuneCountInString(text)
-		remainingSpace := totalWidth - utf8.RuneCountInString(prefix)
-
-		if contentWidth <= remainingSpace {
-			// Text fits on the line
-			sb.WriteString(text)
-			sb.WriteString(strings.Repeat(" ", remainingSpace-contentWidth))
-		} else {
-			// Text needs to be truncated
-			sb.WriteString(text[:remainingSpace])
-		}
-	} else {
-		prefix := "   • "
-		sb.WriteString(prefix)
-
-		// Calculate remaining space and padding
-		contentWidth := utf8.RuneCountInString(text)
-		remainingSpace := totalWidth - utf8.RuneCountInString(prefix)
-
-		if contentWidth <= remainingSpace {
-			// Text fits on the line
-			sb.WriteString(text)
-			sb.WriteString(strings.Repeat(" ", remainingSpace-contentWidth))
-		} else {
-			// Text needs to be truncated
-			sb.WriteString(text[:remainingSpace])
-		}
-	}
-
-	sb.WriteString(VLine + "\n")
-	return sb.String()
-}
-
 func (t *Table) renderBottomBorder() string {
 	var sb strings.Builder
 	sb.WriteString(BottomLeft)
@@ -504,25 +379,6 @@ func (t *Table) renderBottomBorder() string {
 	sb.WriteString(BottomRight + "\n")
 	return sb.String()
 }
-
-// // Helper function to check if a row has a description
-// func (t *Table) hasDescription(rowIndex int) bool {
-// 	_, hasDesc := t.Descriptions[rowIndex]
-// 	return hasDesc
-// }
-
-// // Helper function to check if the next row exists and has a description
-// func (t *Table) nextRowHasDescription(rowIndex int) bool {
-// 	if rowIndex+1 >= len(t.Rows) {
-// 		return false
-// 	}
-// 	_, hasDesc := t.Descriptions[rowIndex+1]
-// 	return hasDesc
-// }
-
-// Add these functions to your existing table.go file
-
-// Implementation of dynamic terminal width detection and text wrapping
 
 // detectTerminalWidth gets the current terminal width or returns a default
 func detectTerminalWidth() int {
@@ -626,119 +482,6 @@ func (t *Table) expandColumnsToFit(extraWidth int) {
 	}
 }
 
-// wrapCellText wraps text to fit within the column width
-func (t *Table) wrapCellText(text string, colIndex int) []string {
-	maxWidth := t.columnWidths[colIndex]
-
-	// If text is shorter than maxWidth, return as is
-	if utf8.RuneCountInString(text) <= maxWidth {
-		return []string{text}
-	}
-
-	// Handle special cases (URLs, package names, comma-separated lists)
-	if strings.Contains(text, "/") || strings.Contains(text, ".") {
-		return t.smartSplitPackageName(text, maxWidth)
-	}
-	if strings.Contains(text, ",") {
-		return t.smartSplitCommaSeparatedList(text, maxWidth)
-	}
-
-	// Otherwise, split by words
-	return t.smartSplitByWords(text, maxWidth)
-}
-
-// smartSplitPackageName splits package names and URLs at logical boundaries
-func (t *Table) smartSplitPackageName(text string, maxWidth int) []string {
-	parts := strings.Split(text, "/")
-	var result []string
-	currentLine := ""
-
-	for i, part := range parts {
-		// Add slash prefix for all but the first part
-		if i > 0 {
-			part = "/" + part
-		}
-
-		// Check if adding this part would exceed the max width
-		if currentLine != "" && utf8.RuneCountInString(currentLine+part) > maxWidth {
-			// Current line is full, add it to result and start a new one
-			result = append(result, currentLine)
-			currentLine = part
-		} else {
-			// Add to current line
-			currentLine += part
-		}
-
-		// If current line itself exceeds max width, split it further
-		if utf8.RuneCountInString(currentLine) > maxWidth {
-			// Use word splitting as fallback
-			wordSplit := t.smartSplitByWords(currentLine, maxWidth)
-
-			// Add all but the last part to result
-			if len(wordSplit) > 1 {
-				result = append(result, wordSplit[:len(wordSplit)-1]...)
-			}
-
-			// Keep last part as current line
-			currentLine = wordSplit[len(wordSplit)-1]
-		}
-	}
-
-	// Add any remaining text
-	if currentLine != "" {
-		result = append(result, currentLine)
-	}
-
-	return result
-}
-
-// smartSplitCommaSeparatedList splits comma-separated lists at logical boundaries
-func (t *Table) smartSplitCommaSeparatedList(text string, maxWidth int) []string {
-	items := strings.Split(text, ",")
-	var result []string
-	currentLine := ""
-
-	for i, item := range items {
-		item = strings.TrimSpace(item)
-
-		// Add comma prefix for all but the first item
-		if i > 0 {
-			item = ", " + item
-		}
-
-		// Check if adding this item would exceed the max width
-		if currentLine != "" && utf8.RuneCountInString(currentLine+item) > maxWidth {
-			// Current line is full, add it to result and start a new one
-			result = append(result, currentLine)
-			currentLine = strings.TrimPrefix(item, ", ")
-		} else {
-			// Add to current line
-			currentLine += item
-		}
-
-		// If current line itself exceeds max width, split it further
-		if utf8.RuneCountInString(currentLine) > maxWidth {
-			// Use word splitting as fallback
-			wordSplit := t.smartSplitByWords(currentLine, maxWidth)
-
-			// Add all but the last part to result
-			if len(wordSplit) > 1 {
-				result = append(result, wordSplit[:len(wordSplit)-1]...)
-			}
-
-			// Keep last part as current line
-			currentLine = wordSplit[len(wordSplit)-1]
-		}
-	}
-
-	// Add any remaining text
-	if currentLine != "" {
-		result = append(result, currentLine)
-	}
-
-	return result
-}
-
 // smartSplitByWords splits text by words to fit within maxWidth
 func (t *Table) smartSplitByWords(text string, maxWidth int) []string {
 	words := strings.Fields(text)
@@ -788,8 +531,6 @@ func (t *Table) smartSplitByWords(text string, maxWidth int) []string {
 	return result
 }
 
-// Now modify the RapidFortTable constructor to use terminal width by default
-
 // RapidFortTable creates a new Table with the given headers
 func RapidFortTable(headers []string) *Table {
 	// Auto-detect terminal width
@@ -813,8 +554,6 @@ func RapidFortTable(headers []string) *Table {
 
 	return table
 }
-
-// Finally, update the Render method to use our new functions
 
 // Render method with correct border management for merged descriptions
 func (t *Table) Render() string {
@@ -967,20 +706,6 @@ func (t *Table) Render() string {
 				sb.WriteString("\n")
 			} else if nextHasDesc {
 				sb.WriteString(t.renderDescToDataBorder())
-				// Next row has description - special handling
-				// sb.WriteString(VLine)
-				// sb.WriteString(t.formatCellContent("", 0))
-				// sb.WriteString(LeftT)
-
-				// // Use HLine for the merged part, TopT for where columns will split
-				// for i := 1; i < len(t.columnWidths); i++ {
-				// 	sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
-				// 	if i < len(t.columnWidths)-1 {
-				// 		sb.WriteString(TopT) // Columns will split at these positions
-				// 	}
-				// }
-				// sb.WriteString(RightT)
-				// sb.WriteString("\n")
 			} else {
 				// Next row is normal data - use Cross for normal separator
 				sb.WriteString(LeftT)
@@ -1012,21 +737,6 @@ func (t *Table) Render() string {
 	return sb.String()
 }
 
-// Render a line of description text
-func (t *Table) renderDescriptionLine(sb *strings.Builder, text string, mergedWidth int) {
-	sb.WriteString(VLine)
-	sb.WriteString(t.formatCellContent("", 0)) // Empty first column
-	sb.WriteString(VLine)
-
-	paddingSpace := mergedWidth - utf8.RuneCountInString(text) - 2
-	sb.WriteString(" ")
-	sb.WriteString(text)
-	sb.WriteString(strings.Repeat(" ", paddingSpace))
-	sb.WriteString(" ")
-	sb.WriteString(VLine)
-	sb.WriteString("\n")
-}
-
 // Render border from description to normal data row
 func (t *Table) renderDescToDataBorder() string {
 
@@ -1041,27 +751,5 @@ func (t *Table) renderDescToDataBorder() string {
 		}
 	}
 	sb.WriteString(RightT + "\n")
-	return sb.String()
-}
-
-// Helper method to render border after a description (going back to normal data row)
-func (t *Table) renderDataToDataBorderAfterDesc() string {
-	var sb strings.Builder
-	sb.WriteString(LeftT)
-
-	// First column
-	sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
-	sb.WriteString(Cross)
-
-	// Rest of columns normally
-	for i := 1; i < len(t.columnWidths); i++ {
-		sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
-		if i < len(t.columnWidths)-1 {
-			sb.WriteString(Cross)
-		}
-	}
-
-	sb.WriteString(RightT)
-	sb.WriteString("\n")
 	return sb.String()
 }
