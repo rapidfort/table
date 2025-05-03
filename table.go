@@ -409,19 +409,16 @@ func (t *Table) renderMiddleBorder() string {
 // renderDataToDescBorder renders the border between a data row and its description
 // Uses BottomT (┴) for column separators instead of Cross (┼)
 func (t *Table) renderDataToDescBorder() string {
+
 	var sb strings.Builder
 	sb.WriteString(LeftT)
-
-	// Draw a continuous line across the entire width with BottomT at column positions
-	for i, w := range t.columnWidths {
-		sb.WriteString(strings.Repeat(HLine, w+2))
-
-		// Add separator if not the last column
-		if i < len(t.columnWidths)-1 {
-			sb.WriteString(BottomT) // Use BottomT (┴) instead of Cross (┼)
-		}
+	sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
+	sb.WriteString(Cross)
+	merged := 0
+	for i := 1; i < len(t.columnWidths); i++ {
+		merged += t.columnWidths[i] + 2
 	}
-
+	sb.WriteString(strings.Repeat(HLine, merged))
 	sb.WriteString(RightT + "\n")
 	return sb.String()
 }
@@ -986,20 +983,21 @@ func (t *Table) Render() string {
 				sb.WriteString(BottomRight)
 				sb.WriteString("\n")
 			} else if nextHasDesc {
+				sb.WriteString(t.renderDescToDataBorder())
 				// Next row has description - special handling
-				sb.WriteString(VLine)
-				sb.WriteString(t.formatCellContent("", 0))
-				sb.WriteString(LeftT)
+				// sb.WriteString(VLine)
+				// sb.WriteString(t.formatCellContent("", 0))
+				// sb.WriteString(LeftT)
 
-				// Use HLine for the merged part, TopT for where columns will split
-				for i := 1; i < len(t.columnWidths); i++ {
-					sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
-					if i < len(t.columnWidths)-1 {
-						sb.WriteString(TopT) // Columns will split at these positions
-					}
-				}
-				sb.WriteString(RightT)
-				sb.WriteString("\n")
+				// // Use HLine for the merged part, TopT for where columns will split
+				// for i := 1; i < len(t.columnWidths); i++ {
+				// 	sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
+				// 	if i < len(t.columnWidths)-1 {
+				// 		sb.WriteString(TopT) // Columns will split at these positions
+				// 	}
+				// }
+				// sb.WriteString(RightT)
+				// sb.WriteString("\n")
 			} else {
 				// Next row is normal data - use Cross for normal separator
 				sb.WriteString(LeftT)
@@ -1047,19 +1045,20 @@ func (t *Table) renderDescriptionLine(sb *strings.Builder, text string, mergedWi
 }
 
 // Render border from description to normal data row
-func (t *Table) renderDescToDataBorder(sb *strings.Builder) {
+func (t *Table) renderDescToDataBorder() string {
+
+	var sb strings.Builder
 	sb.WriteString(LeftT)
 	sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
 	sb.WriteString(Cross)
-
 	for i := 1; i < len(t.columnWidths); i++ {
 		sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
 		if i < len(t.columnWidths)-1 {
-			sb.WriteString(Cross)
+			sb.WriteString(TopT)
 		}
 	}
-	sb.WriteString(RightT)
-	sb.WriteString("\n")
+	sb.WriteString(RightT + "\n")
+	return sb.String()
 }
 
 // Helper method to render border after a description (going back to normal data row)
