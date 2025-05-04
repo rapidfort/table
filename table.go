@@ -41,7 +41,8 @@ const (
 type Table struct {
 	Headers            []string
 	Rows               [][]string
-	Descriptions       map[int]string
+	Descriptions       map[int]string // row index -> description
+	DescriptionTitles  map[int]string // row index -> title (optional)
 	columnWidths       []int
 	alignments         []string // "left", "right", "center" for each column
 	consoleWidth       int      // Maximum width of the console
@@ -187,6 +188,14 @@ func (t *Table) AddRow(row []string) {
 func (t *Table) AddDescription(rowIndex int, description string) {
 	if rowIndex >= 0 && rowIndex < len(t.Rows) {
 		t.Descriptions[rowIndex] = description
+	}
+}
+
+// AddDescriptionWithTitle adds a description with a title for a specific row
+func (t *Table) AddDescriptionWithTitle(rowIndex int, title string, description string) {
+	if rowIndex >= 0 && rowIndex < len(t.Rows) {
+		t.Descriptions[rowIndex] = description
+		t.DescriptionTitles[rowIndex] = title
 	}
 }
 
@@ -454,11 +463,12 @@ func RapidFortTable(headers []string) *Table {
 		Headers:            headers,
 		Rows:               [][]string{},
 		Descriptions:       make(map[int]string),
+		DescriptionTitles:  make(map[int]string), // Initialize the new field
 		columnWidths:       make([]int, len(headers)),
 		alignments:         make([]string, len(headers)),
 		consoleWidth:       termWidth,
 		fillWidth:          false, // Change default to false - don't fill width unnecessarily
-		dimBorder:          false,
+		dimBorder:          true,
 		maxWidths:          make(map[int]int),
 		highlightHeaders:   true,    // Always highlight headers by default
 		highlightedHeaders: []int{}, // Initialize the highlighted headers slice
@@ -682,6 +692,8 @@ func (t *Table) Render() string {
 		if desc, ok := t.Descriptions[ri]; ok {
 			// Process the description
 			bulletPoints := strings.Split(desc, "\n")
+
+			// If description doesn't contain newlines, check for comma separation
 			if len(bulletPoints) == 1 && strings.Contains(desc, ",") {
 				bulletPoints = strings.Split(desc, ",")
 				for i := range bulletPoints {
@@ -714,18 +726,30 @@ func (t *Table) Render() string {
 			sb.WriteString(t.getStyledChar(RightT))
 			sb.WriteString("\n")
 
-			// Render notes section
+			// Render title section based on whether title exists
 			sb.WriteString(t.getStyledChar(VLine))
 			sb.WriteString(t.formatCellContent("", 0)) // Empty first column
 			sb.WriteString(t.getStyledChar(VLine))
-			notesHeader := "[ RF Advisory ]"
-			paddingSpace := mergedWidth - utf8.RuneCountInString(notesHeader)
-			sb.WriteString(notesHeader)
+
+			// Check if there's a title for this description
+			title, hasTitle := t.DescriptionTitles[ri]
+			var headerText string
+			if hasTitle && title != "" {
+				headerText = "[ " + title + " ]"
+			} else {
+				headerText = ""
+			}
+
+			paddingSpace := mergedWidth - utf8.RuneCountInString(headerText)
+			if paddingSpace < 0 {
+				paddingSpace = 0
+			}
+			sb.WriteString(headerText)
 			sb.WriteString(strings.Repeat(" ", paddingSpace))
 			sb.WriteString(t.getStyledChar(VLine))
 			sb.WriteString("\n")
 
-			// Render bullet points
+			// Render description content
 			for _, bp := range bulletPoints {
 				bp = strings.TrimSpace(bp)
 				if bp != "" {
@@ -738,6 +762,9 @@ func (t *Table) Render() string {
 						sb.WriteString(t.getStyledChar(VLine))
 
 						paddingSpace := mergedWidth - utf8.RuneCountInString(wrappedLine)
+						if paddingSpace < 0 {
+							paddingSpace = 0
+						}
 						sb.WriteString(wrappedLine)
 						sb.WriteString(strings.Repeat(" ", paddingSpace))
 						sb.WriteString(t.getStyledChar(VLine))

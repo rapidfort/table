@@ -236,8 +236,8 @@ func test3HeaderHighlighting(group *table.TableGroup, tc TestCase, rng *rand.Ran
 	tbl.AddRow([]string{"1", "Laptop Pro X1", "Electronics", "25", "$1,299.99", "Active"})
 	tbl.AddRow([]string{"2", "Wireless Mouse", "Accessories", "150", "$29.99", "Active"})
 	tbl.AddRow([]string{"3", "USB-C Hub", "Accessories", "75", "$49.99", "Low Stock"})
-	tbl.AddDescription(0, "High demand item, consider restocking")
-	tbl.AddDescription(2, "Running low on inventory, order more from supplier")
+	tbl.AddDescriptionWithTitle(0, "Advisory", "High demand item, consider restocking")
+	tbl.AddDescriptionWithTitle(2, "Notes", "Running low on inventory, order more from supplier")
 
 	// FIXED: Removed \n from end of Println
 	fmt.Println("Headers [1], [3], and [4] are highlighted in bold:")
