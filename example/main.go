@@ -23,6 +23,7 @@ type TestCase struct {
 }
 
 func main() {
+    simple()
 	// Initialize random source (modern way)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -394,4 +395,19 @@ func generateStatus(rng *rand.Rand) string {
 func generateCategory(rng *rand.Rand) string {
 	categories := []string{"Electronics", "Books", "Clothing", "Food", "Tools", "Other"}
 	return categories[rng.Intn(len(categories))]
+}
+
+func simple() {
+    // Create a table
+    tbl := table.RapidFortTable([]string{"Name", "Age", "City"})
+    
+    // Add rows
+    tbl.AddRow([]string{"Alice", "30", "New York"})
+    tbl.AddRow([]string{"Bob", "25", "San Francisco"})
+    
+    // Add description to a row
+    tbl.AddDescription(0, "Special customer discount applied")
+    
+    // Render and print
+    fmt.Println(tbl.Render())
 }
