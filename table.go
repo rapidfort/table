@@ -632,14 +632,14 @@ func (t *Table) Render() string {
 		}
 
 		for line := 0; line < maxR; line++ {
-			sb.WriteString(t.getStyledChar(VLine)) // Changed
+			sb.WriteString(t.getStyledChar(VLine))
 			for ci := range row {
 				txt := ""
 				if line < len(rowLines[ci]) {
 					txt = rowLines[ci][line]
 				}
 				sb.WriteString(t.formatCellContent(txt, ci))
-				sb.WriteString(t.getStyledChar(VLine)) // Changed
+				sb.WriteString(t.getStyledChar(VLine))
 			}
 			sb.WriteString("\n")
 		}
@@ -724,27 +724,27 @@ func (t *Table) Render() string {
 			// Render appropriate border after description
 			if isLastRow {
 				// Last row with description - properly render bottom border
-				sb.WriteString(t.getStyledChar(BottomLeft))             // Changed
-				sb.WriteString(t.getStyledHLine(t.columnWidths[0] + 2)) // Changed
-				sb.WriteString(t.getStyledChar(BottomT))                // Changed
-				sb.WriteString(t.getStyledHLine(mergedWidth))           // Changed
-				sb.WriteString(t.getStyledChar(BottomRight))            // Changed
+				sb.WriteString(t.getStyledChar(BottomLeft))
+				sb.WriteString(t.getStyledHLine(t.columnWidths[0] + 2))
+				sb.WriteString(t.getStyledChar(BottomT))
+				sb.WriteString(t.getStyledHLine(mergedWidth))
+				sb.WriteString(t.getStyledChar(BottomRight))
 				sb.WriteString("\n")
 			} else if nextHasDesc {
 				sb.WriteString(t.renderDescToDataBorder())
 			} else {
 				// Next row is normal data - use Cross for normal separator
 				sb.WriteString(t.getStyledChar(LeftT))
-				sb.WriteString(t.getStyledHLine(t.columnWidths[0] + 2)) // Changed
-				sb.WriteString(t.getStyledChar(Cross))                  // Changed
+				sb.WriteString(t.getStyledHLine(t.columnWidths[0] + 2))
+				sb.WriteString(t.getStyledChar(Cross))
 
 				for i := 1; i < len(t.columnWidths); i++ {
-					sb.WriteString(t.getStyledHLine(t.columnWidths[i] + 2)) // Changed
+					sb.WriteString(t.getStyledHLine(t.columnWidths[i] + 2))
 					if i < len(t.columnWidths)-1 {
-						sb.WriteString(t.getStyledChar(Cross)) // Changed
+						sb.WriteString(t.getStyledChar(TopT))
 					}
 				}
-				sb.WriteString(t.getStyledChar(RightT)) // Changed
+				sb.WriteString(t.getStyledChar(RightT))
 				sb.WriteString("\n")
 			}
 		} else {
@@ -766,15 +766,15 @@ func (t *Table) Render() string {
 // Render border from description to normal data row
 func (t *Table) renderDescToDataBorder() string {
 	var sb strings.Builder
-	sb.WriteString(t.getStyledChar(LeftT))                  // Changed
-	sb.WriteString(t.getStyledHLine(t.columnWidths[0] + 2)) // Changed
-	sb.WriteString(t.getStyledChar(Cross))                  // Changed
+	sb.WriteString(t.getStyledChar(LeftT))
+	sb.WriteString(t.getStyledHLine(t.columnWidths[0] + 2))
+	sb.WriteString(t.getStyledChar(Cross))
 	for i := 1; i < len(t.columnWidths); i++ {
-		sb.WriteString(t.getStyledHLine(t.columnWidths[i] + 2)) // Changed
+		sb.WriteString(t.getStyledHLine(t.columnWidths[i] + 2))
 		if i < len(t.columnWidths)-1 {
-			sb.WriteString(t.getStyledChar(TopT)) // Changed
+			sb.WriteString(t.getStyledChar(TopT))
 		}
 	}
-	sb.WriteString(t.getStyledChar(RightT) + "\n") // Changed
+	sb.WriteString(t.getStyledChar(RightT) + "\n")
 	return sb.String()
 }

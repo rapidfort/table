@@ -25,7 +25,7 @@ func main() {
 	table1.AddDescription(0, "Terrapin attack\nVulnerability in SSH protocol allowing chosen-ciphertext attacks against ChaCha20-Poly1305 and AES-GCM")
 
 	table1.AddRow([]string{"2", "CVE-2023-4863", "HIGH", "libwebp", "1.0.4-3", "1.0.4-3.1"})
-	//table1.AddDescription(1, "Heap buffer overflow in WebP library\nOut-of-bounds memory access in VP8L decoding")
+	table1.AddDescription(1, "Heap buffer overflow in WebP library\nOut-of-bounds memory access in VP8L decoding")
 
 	// Add the first table to the group
 	group.Add(table1)
