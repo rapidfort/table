@@ -146,7 +146,7 @@ func test1RandomSizedColumns(group *table.TableGroup, tc TestCase, rng *rand.Ran
 	tbl := table.RapidFortTable(headers)
 	tbl.SetDimBorder(tc.dimBorder)
 	tbl.SetFillWidth(tc.fillWidth)
-	tbl.SetBorderless(true)
+	tbl.SetBorderless(false)
 
 	// Add rows with random sized content
 	for i := 0; i < 5; i++ {
@@ -381,7 +381,7 @@ func generateRandomDescription(rng *rand.Rand) string {
 		"Short desc",
 		"A very long description that should definitely wrap across multiple lines in the table cell",
 		"Description with special characters: @#$%^&*()",
-		"Multiple lines\nWith line breaks\nTesting formatting",
+		"Multiple lines With line breaks Testing formatting Multiple lines With line breaks Testing formatting Multiple lines With line breaks Testing formatting\n Multiple lines With line breaks Testing formatting",
 	}
 	return descriptions[rng.Intn(len(descriptions))]
 }

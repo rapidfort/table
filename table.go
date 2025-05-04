@@ -318,8 +318,6 @@ func (t *Table) adjustColumnWidthsToFit() {
 		}
 	}
 
-	// REMOVED: Do not expand columns to fill width when not needed
-	// The table will use only the minimum required width for each column
 }
 
 func (t *Table) smartSplitCellContent(content string, colIndex int) []string {
@@ -749,28 +747,21 @@ func (t *Table) Render() string {
 			sb.WriteString(t.getStyledChar(RightT))
 			sb.WriteString("\n")
 
-			// Render title section based on whether title exists
-			sb.WriteString(t.getStyledChar(VLine))
-			sb.WriteString(t.formatCellContent("", 0)) // Empty first column
-			sb.WriteString(t.getStyledChar(VLine))
-
-			// Check if there's a title for this description
-			title, hasTitle := t.DescriptionTitles[ri]
-			var headerText string
-			if hasTitle && title != "" {
-				headerText = "[ " + title + " ]"
-			} else {
-				headerText = ""
+			// Render title only if explicitly provided
+			if title, ok := t.DescriptionTitles[ri]; ok && title != "" {
+				headerText := "[ " + title + " ]"
+				pad := mergedWidth - utf8.RuneCountInString(headerText)
+				if pad < 0 {
+					pad = 0
+				}
+				sb.WriteString(t.getStyledChar(VLine))
+				sb.WriteString(t.formatCellContent("", 0)) // Empty first column
+				sb.WriteString(t.getStyledChar(VLine))
+				sb.WriteString(headerText)
+				sb.WriteString(strings.Repeat(" ", pad))
+				sb.WriteString(t.getStyledChar(VLine))
+				sb.WriteString("\n")
 			}
-
-			paddingSpace := mergedWidth - utf8.RuneCountInString(headerText)
-			if paddingSpace < 0 {
-				paddingSpace = 0
-			}
-			sb.WriteString(headerText)
-			sb.WriteString(strings.Repeat(" ", paddingSpace))
-			sb.WriteString(t.getStyledChar(VLine))
-			sb.WriteString("\n")
 
 			// Render description content
 			for _, bp := range bulletPoints {
