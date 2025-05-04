@@ -4,6 +4,7 @@ package table
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -55,6 +56,48 @@ type Table struct {
 	highlightedHeaders []int       // Indices of headers to highlight
 	// Reference to the table group this table belongs to (if any)
 	group *TableGroup
+}
+
+// ansiRegexp matches any CSI sequence (e.g. "\x1b[31m", "\x1b[0K", etc.)
+var ansiRegexp = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// stripANSI removes ALL ANSI escape sequences from s.
+func stripANSI(s string) string {
+	return ansiRegexp.ReplaceAllString(s, "")
+}
+
+// extractWrappingANSI splits s into leading CSI prefix, trailing CSI suffix,
+// and the printable core in between.
+func extractWrappingANSI(s string) (prefix, suffix, core string) {
+	// 1) Peel off all leading CSI sequences
+	idx := 0
+	for {
+		loc := ansiRegexp.FindStringIndex(s[idx:])
+		if loc == nil || loc[0] != 0 {
+			break
+		}
+		// include that sequence
+		seq := s[idx : idx+loc[1]]
+		prefix += seq
+		idx += loc[1]
+	}
+	// 2) Peel off all trailing CSI sequences
+	end := len(s)
+	for {
+		locs := ansiRegexp.FindAllStringIndex(s, -1)
+		if len(locs) == 0 {
+			break
+		}
+		last := locs[len(locs)-1]
+		if last[1] != end {
+			break
+		}
+		// that sequence runs right up to `end`
+		suffix = s[last[0]:last[1]] + suffix
+		end = last[0]
+	}
+	core = s[idx:end]
+	return
 }
 
 // TableGroup manages multiple tables with consistent column widths
@@ -151,16 +194,6 @@ func (t *Table) getHighlightedText(text string, headerIndex int) string {
 		return BoldStyleStart + text + BoldStyleEnd
 	}
 	return text
-}
-
-// stripANSI removes ANSI codes from a string for length calculation
-func stripANSI(str string) string {
-	// This is a simple implementation that removes common ANSI codes
-	str = strings.ReplaceAll(str, BoldStyleStart, "")
-	str = strings.ReplaceAll(str, BoldStyleEnd, "")
-	str = strings.ReplaceAll(str, DimStyleStart, "")
-	str = strings.ReplaceAll(str, DimStyleEnd, "")
-	return str
 }
 
 // Add adds a table to the group
@@ -320,22 +353,38 @@ func (t *Table) adjustColumnWidthsToFit() {
 
 }
 
+// smartSplitCellContent splits a cell, preserving any ANSI prefix/suffix,
+// and applies your original: comma-first, slash-second, then word-fallback.
 func (t *Table) smartSplitCellContent(content string, colIndex int) []string {
-	maxWidth := t.columnWidths[colIndex]
-	if utf8.RuneCountInString(content) <= maxWidth {
-		return []string{content}
+	// 1) Peel off any ANSI wrapper
+	prefix, suffix, core := extractWrappingANSI(content)
+
+	// 2) Measure the visible length
+	maxW := t.columnWidths[colIndex]
+	visible := stripANSI(core)
+	if utf8.RuneCountInString(visible) <= maxW {
+		// nothing to wrap
+		return []string{prefix + core + suffix}
 	}
 
-	// Try splitting by comma first
-	if strings.Contains(content, ",") {
-		return t.splitCommaSeparatedList(content, maxWidth)
+	// 3) Try your original split strategies on the **plain** core,
+	//    then re-attach prefix/suffix to each piece.
+
+	var parts []string
+	if strings.Contains(core, ",") {
+		parts = t.splitCommaSeparatedList(core, maxW)
+	} else if strings.Contains(core, "/") || strings.Contains(core, ".") {
+		parts = t.splitLongString(core, maxW)
+	} else {
+		parts = t.splitByWords(core, maxW)
 	}
-	// Then try slash
-	if strings.Contains(content, "/") || strings.Contains(content, ".") {
-		return t.splitLongString(content, maxWidth)
+
+	// 4) Re-attach ANSI to every wrapped line
+	out := make([]string, len(parts))
+	for i, line := range parts {
+		out[i] = prefix + line + suffix
 	}
-	// Fall back to word splitting
-	return t.splitByWords(content, maxWidth)
+	return out
 }
 
 func (t *Table) splitLongString(content string, maxWidth int) []string {
@@ -750,7 +799,8 @@ func (t *Table) Render() string {
 			// Render title only if explicitly provided
 			if title, ok := t.DescriptionTitles[ri]; ok && title != "" {
 				headerText := "[ " + title + " ]"
-				pad := mergedWidth - utf8.RuneCountInString(headerText)
+				visibleTitle := stripANSI(headerText)
+				pad := mergedWidth - utf8.RuneCountInString(visibleTitle)
 				if pad < 0 {
 					pad = 0
 				}
@@ -795,7 +845,9 @@ func (t *Table) Render() string {
 					}
 
 					// Pad the rest of the merged cell
-					pad := mergedWidth - utf8.RuneCountInString(display)
+					//pad := mergedWidth - utf8.RuneCountInString(display)
+					visible := stripANSI(display)
+					pad := mergedWidth - utf8.RuneCountInString(visible)
 					if pad < 0 {
 						pad = 0
 					}
