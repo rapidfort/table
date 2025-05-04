@@ -766,24 +766,43 @@ func (t *Table) Render() string {
 			// Render description content
 			for _, bp := range bulletPoints {
 				bp = strings.TrimSpace(bp)
-				if bp != "" {
-					bulletLine := "   • " + bp
-					wrappedLines := t.smartSplitByWords(bulletLine, mergedWidth-4)
+				if bp == "" {
+					continue
+				}
+				// Bullet prefix
+				prefix := "   • "
+				// Compute width available for text after the prefix
+				textWidth := mergedWidth - utf8.RuneCountInString(prefix) - 2
+				if textWidth < 0 {
+					textWidth = 0
+				}
+				// Wrap the raw description text to fit
+				wrapped := t.smartSplitByWords(bp, textWidth)
 
-					for _, wrappedLine := range wrappedLines {
-						sb.WriteString(t.getStyledChar(VLine))
-						sb.WriteString(t.formatCellContent("", 0)) // Empty first column
-						sb.WriteString(t.getStyledChar(VLine))
+				for i, line := range wrapped {
+					sb.WriteString(t.getStyledChar(VLine))
+					sb.WriteString(t.formatCellContent("", 0)) // Empty first column
+					sb.WriteString(t.getStyledChar(VLine))
 
-						paddingSpace := mergedWidth - utf8.RuneCountInString(wrappedLine)
-						if paddingSpace < 0 {
-							paddingSpace = 0
-						}
-						sb.WriteString(wrappedLine)
-						sb.WriteString(strings.Repeat(" ", paddingSpace))
-						sb.WriteString(t.getStyledChar(VLine))
-						sb.WriteString("\n")
+					var display string
+					if i == 0 {
+						// First wrapped line gets the bullet prefix
+						display = prefix + line
+					} else {
+						// Subsequent lines are indented under the text start
+						indent := strings.Repeat(" ", utf8.RuneCountInString(prefix))
+						display = indent + line
 					}
+
+					// Pad the rest of the merged cell
+					pad := mergedWidth - utf8.RuneCountInString(display)
+					if pad < 0 {
+						pad = 0
+					}
+					sb.WriteString(display)
+					sb.WriteString(strings.Repeat(" ", pad))
+					sb.WriteString(t.getStyledChar(VLine))
+					sb.WriteString("\n")
 				}
 			}
 
