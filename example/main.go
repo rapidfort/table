@@ -146,6 +146,7 @@ func test1RandomSizedColumns(group *table.TableGroup, tc TestCase, rng *rand.Ran
 	tbl := table.RapidFortTable(headers)
 	tbl.SetDimBorder(tc.dimBorder)
 	tbl.SetFillWidth(tc.fillWidth)
+	tbl.SetBorderless(true)
 
 	// Add rows with random sized content
 	for i := 0; i < 5; i++ {

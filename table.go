@@ -49,6 +49,8 @@ type Table struct {
 	fillWidth          bool
 	maxWidths          map[int]int // Maximum width for specific columns
 	dimBorder          bool        // New field
+	supportANSI        bool        // Support for ANSI codes
+	borderless         bool        // Flag to disable borders
 	highlightHeaders   bool        // Always highlight headers
 	highlightedHeaders []int       // Indices of headers to highlight
 	// Reference to the table group this table belongs to (if any)
@@ -71,6 +73,11 @@ func NewGroup() *TableGroup {
 // GetTables returns the tables in the group (public method for testing)
 func (g *TableGroup) GetTables() []*Table {
 	return g.tables
+}
+
+// SetBorderless enables/disables drawing of any box‐drawing characters.
+func (t *Table) SetBorderless(on bool) {
+	t.borderless = on
 }
 
 func (t *Table) SetDimBorder(enabled bool) {
@@ -114,7 +121,10 @@ func (t *Table) isHighlightedHeader(index int) bool {
 
 // getStyledChar returns a border character with optional dim styling
 func (t *Table) getStyledChar(char string) string {
-	if t.dimBorder {
+	if t.borderless {
+		return " "
+	}
+	if t.dimBorder && t.supportANSI {
 		return DimStyleStart + char + DimStyleEnd
 	}
 	return char
@@ -122,7 +132,10 @@ func (t *Table) getStyledChar(char string) string {
 
 // getStyledHLine returns a horizontal line string with optional dim styling
 func (t *Table) getStyledHLine(width int) string {
-	if t.dimBorder {
+	if t.borderless {
+		return strings.Repeat(" ", width)
+	}
+	if t.dimBorder && t.supportANSI {
 		return DimStyleStart + strings.Repeat(HLine, width) + DimStyleEnd
 	}
 	return strings.Repeat(HLine, width)
@@ -130,6 +143,10 @@ func (t *Table) getStyledHLine(width int) string {
 
 // getHighlightedText returns text with bold styling if it should be highlighted
 func (t *Table) getHighlightedText(text string, headerIndex int) string {
+	if !t.supportANSI {
+		return text
+	}
+
 	if t.isHighlightedHeader(headerIndex) {
 		return BoldStyleStart + text + BoldStyleEnd
 	}
@@ -469,9 +486,15 @@ func RapidFortTable(headers []string) *Table {
 		consoleWidth:       termWidth,
 		fillWidth:          false, // Change default to false - don't fill width unnecessarily
 		dimBorder:          true,
+		supportANSI:        term.IsTerminal(int(os.Stdout.Fd())),
 		maxWidths:          make(map[int]int),
 		highlightHeaders:   true,    // Always highlight headers by default
 		highlightedHeaders: []int{}, // Initialize the highlighted headers slice
+	}
+
+	if !table.supportANSI {
+		table.dimBorder = false
+		table.highlightHeaders = false
 	}
 
 	// Set default left alignment for all columns
