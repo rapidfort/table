@@ -12,7 +12,8 @@ import (
 
 const (
 	// ANSI codes
-	DimStyleStart  = "\x1b[2m"
+	DimStyleStart = "\x1b[38;5;242m" // Most visible gray
+
 	DimStyleEnd    = "\x1b[0m"
 	BoldStyleStart = "\x1b[1m" // Bold style for highlighting
 	BoldStyleEnd   = "\x1b[0m"
