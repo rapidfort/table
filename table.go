@@ -12,8 +12,10 @@ import (
 
 const (
 	// ANSI codes
-	DimStyleStart = "\x1b[2m"
-	DimStyleEnd   = "\x1b[0m"
+	DimStyleStart  = "\x1b[2m"
+	DimStyleEnd    = "\x1b[0m"
+	BoldStyleStart = "\x1b[1m" // Bold style for highlighting
+	BoldStyleEnd   = "\x1b[0m"
 
 	// Box drawing characters
 	TopLeft     = "┌"
@@ -31,20 +33,22 @@ const (
 
 	// Cell sizing constants
 	minTerminalWidth = 80
-	maxColumnWidth   = 30
+	maxColumnWidth   = 50
 )
 
 // Table represents a table with borders and alignment control
 type Table struct {
-	Headers      []string
-	Rows         [][]string
-	Descriptions map[int]string
-	columnWidths []int
-	alignments   []string // "left", "right", "center" for each column
-	consoleWidth int      // Maximum width of the console
-	fillWidth    bool
-	maxWidths    map[int]int // Maximum width for specific columns
-	dimBorder    bool        // New field
+	Headers            []string
+	Rows               [][]string
+	Descriptions       map[int]string
+	columnWidths       []int
+	alignments         []string // "left", "right", "center" for each column
+	consoleWidth       int      // Maximum width of the console
+	fillWidth          bool
+	maxWidths          map[int]int // Maximum width for specific columns
+	dimBorder          bool        // New field
+	highlightHeaders   bool        // Always highlight headers
+	highlightedHeaders []int       // Indices of headers to highlight
 	// Reference to the table group this table belongs to (if any)
 	group *TableGroup
 }
@@ -71,6 +75,41 @@ func (t *Table) SetDimBorder(enabled bool) {
 	t.dimBorder = enabled
 }
 
+// SetHeaderHighlighting enables/disables header highlighting
+func (t *Table) SetHeaderHighlighting(enabled bool) {
+	t.highlightHeaders = enabled
+}
+
+// SetHighlightedHeaders sets which headers should be highlighted
+func (t *Table) SetHighlightedHeaders(indices []int) {
+	t.highlightedHeaders = indices
+}
+
+// AddHighlightedHeader adds a header to the highlighted list
+func (t *Table) AddHighlightedHeader(index int) {
+	if index >= 0 && index < len(t.Headers) {
+		t.highlightedHeaders = append(t.highlightedHeaders, index)
+	}
+}
+
+// ClearHighlightedHeaders removes all header highlights
+func (t *Table) ClearHighlightedHeaders() {
+	t.highlightedHeaders = nil
+}
+
+// isHighlightedHeader checks if a header at given index should be highlighted
+func (t *Table) isHighlightedHeader(index int) bool {
+	if t.highlightHeaders {
+		return true // Highlight all headers if this flag is set
+	}
+	for _, i := range t.highlightedHeaders {
+		if i == index {
+			return true
+		}
+	}
+	return false
+}
+
 // getStyledChar returns a border character with optional dim styling
 func (t *Table) getStyledChar(char string) string {
 	if t.dimBorder {
@@ -87,66 +126,28 @@ func (t *Table) getStyledHLine(width int) string {
 	return strings.Repeat(HLine, width)
 }
 
+// getHighlightedText returns text with bold styling if it should be highlighted
+func (t *Table) getHighlightedText(text string, headerIndex int) string {
+	if t.isHighlightedHeader(headerIndex) {
+		return BoldStyleStart + text + BoldStyleEnd
+	}
+	return text
+}
+
+// stripANSI removes ANSI codes from a string for length calculation
+func stripANSI(str string) string {
+	// This is a simple implementation that removes common ANSI codes
+	str = strings.ReplaceAll(str, BoldStyleStart, "")
+	str = strings.ReplaceAll(str, BoldStyleEnd, "")
+	str = strings.ReplaceAll(str, DimStyleStart, "")
+	str = strings.ReplaceAll(str, DimStyleEnd, "")
+	return str
+}
+
 // Add adds a table to the group
 func (g *TableGroup) Add(table *Table) {
 	g.tables = append(g.tables, table)
 	table.group = g
-}
-
-// SyncColumnWidths ensures all tables in the group have consistent column widths
-func (g *TableGroup) SyncColumnWidths() {
-	if len(g.tables) == 0 {
-		return
-	}
-
-	// Initialize with the first table's column count
-	firstTable := g.tables[0]
-	colCount := len(firstTable.Headers)
-
-	// Ensure first table has columnWidths initialized
-	if len(firstTable.columnWidths) != colCount {
-		firstTable.columnWidths = make([]int, colCount)
-	}
-
-	// Initialize the group's column widths
-	g.columnWidths = make([]int, colCount)
-
-	// Find the maximum width for each column across all tables
-	for _, table := range g.tables {
-		// Ensure each table has columnWidths initialized
-		if len(table.columnWidths) != colCount {
-			table.columnWidths = make([]int, colCount)
-		}
-
-		table.calculateInitialColumnWidths()
-
-		for i := 0; i < colCount && i < len(table.columnWidths); i++ {
-			// Apply maximum column width constraint
-			width := table.columnWidths[i]
-			if width > maxColumnWidth {
-				width = maxColumnWidth
-			}
-
-			if width > g.columnWidths[i] {
-				// Check if this column has a max width constraint
-				if maxWidth, exists := table.maxWidths[i]; exists && width > maxWidth {
-					g.columnWidths[i] = maxWidth
-				} else {
-					g.columnWidths[i] = width
-				}
-			}
-		}
-	}
-
-	// Apply the group's column widths to all tables
-	for _, table := range g.tables {
-		for i := 0; i < colCount && i < len(table.columnWidths); i++ {
-			table.columnWidths[i] = g.columnWidths[i]
-		}
-
-		// Apply any final adjustments needed for console width
-		table.adjustColumnWidthsToFit()
-	}
 }
 
 // SetFillWidth sets whether the table should expand to fill the console width
@@ -185,6 +186,39 @@ func (t *Table) AddRow(row []string) {
 func (t *Table) AddDescription(rowIndex int, description string) {
 	if rowIndex >= 0 && rowIndex < len(t.Rows) {
 		t.Descriptions[rowIndex] = description
+	}
+}
+
+// formatCellContent formats a cell's content with alignment and padding
+func (t *Table) formatCellContent(content string, colIndex int) string {
+	w := t.columnWidths[colIndex]
+
+	// Strip ANSI codes for length calculation
+	strippedContent := stripANSI(content)
+	contentLength := utf8.RuneCountInString(strippedContent)
+
+	switch t.alignments[colIndex] {
+	case "right":
+		padding := w - contentLength
+		if padding < 0 {
+			padding = 0
+		}
+		return fmt.Sprintf(" %s%s ", strings.Repeat(" ", padding), content)
+	case "center":
+		totalPad := w - contentLength
+		if totalPad < 0 {
+			totalPad = 0
+		}
+		left := totalPad / 2
+		return fmt.Sprintf(" %s%s%s ",
+			strings.Repeat(" ", left), content,
+			strings.Repeat(" ", totalPad-left))
+	default:
+		padding := w - contentLength
+		if padding < 0 {
+			padding = 0
+		}
+		return fmt.Sprintf(" %s%s ", content, strings.Repeat(" ", padding))
 	}
 }
 
@@ -361,23 +395,6 @@ func (t *Table) splitByWords(content string, maxWidth int) []string {
 	return res
 }
 
-// formatCellContent formats a cell's content with alignment and padding
-func (t *Table) formatCellContent(content string, colIndex int) string {
-	w := t.columnWidths[colIndex]
-	switch t.alignments[colIndex] {
-	case "right":
-		return fmt.Sprintf(" %*s ", w, content)
-	case "center":
-		totalPad := w - utf8.RuneCountInString(content)
-		left := totalPad / 2
-		return fmt.Sprintf(" %s%s%s ",
-			strings.Repeat(" ", left), content,
-			strings.Repeat(" ", totalPad-left))
-	default:
-		return fmt.Sprintf(" %-*s ", w, content)
-	}
-}
-
 func (t *Table) renderTopBorder() string {
 	var sb strings.Builder
 	sb.WriteString(t.getStyledChar(TopLeft))
@@ -425,6 +442,82 @@ func detectTerminalWidth() int {
 		return minTerminalWidth
 	}
 	return width
+}
+
+// RapidFortTable creates a new Table with the given headers
+func RapidFortTable(headers []string) *Table {
+	// Auto-detect terminal width
+	termWidth := detectTerminalWidth()
+
+	table := &Table{
+		Headers:            headers,
+		Rows:               [][]string{},
+		Descriptions:       make(map[int]string),
+		columnWidths:       make([]int, len(headers)),
+		alignments:         make([]string, len(headers)),
+		consoleWidth:       termWidth,
+		fillWidth:          false, // Change default to false - don't fill width unnecessarily
+		dimBorder:          false,
+		maxWidths:          make(map[int]int),
+		highlightHeaders:   true,    // Always highlight headers by default
+		highlightedHeaders: []int{}, // Initialize the highlighted headers slice
+	}
+
+	// Set default left alignment for all columns
+	for i := range headers {
+		table.alignments[i] = "left"
+	}
+
+	return table
+}
+
+// smartSplitByWords splits text by words to fit within maxWidth
+func (t *Table) smartSplitByWords(text string, maxWidth int) []string {
+	words := strings.Fields(text)
+	var result []string
+	currentLine := ""
+
+	for _, word := range words {
+		// Check if adding this word would exceed the max width
+		testLine := word
+		if currentLine != "" {
+			testLine = currentLine + " " + word
+		}
+
+		if utf8.RuneCountInString(testLine) <= maxWidth {
+			// Word fits on current line
+			currentLine = testLine
+		} else {
+			// Word doesn't fit, add current line to result and start new one
+			if currentLine != "" {
+				result = append(result, currentLine)
+			}
+
+			// If the word itself is longer than maxWidth, split it
+			if utf8.RuneCountInString(word) > maxWidth {
+				// Split the word into chunks of maxWidth
+				for len(word) > 0 {
+					if utf8.RuneCountInString(word) <= maxWidth {
+						currentLine = word
+						word = ""
+					} else {
+						// Find a good split point (max width characters)
+						result = append(result, word[:maxWidth])
+						word = word[maxWidth:]
+					}
+				}
+			} else {
+				currentLine = word
+			}
+		}
+	}
+
+	// Add any remaining text
+	if currentLine != "" {
+		result = append(result, currentLine)
+	}
+
+	return result
 }
 
 // calculateOptimalColumnWidths distributes width to each column based on content
@@ -519,80 +612,6 @@ func (t *Table) expandColumnsToFit(extraWidth int) {
 	}
 }
 
-// smartSplitByWords splits text by words to fit within maxWidth
-func (t *Table) smartSplitByWords(text string, maxWidth int) []string {
-	words := strings.Fields(text)
-	var result []string
-	currentLine := ""
-
-	for _, word := range words {
-		// Check if adding this word would exceed the max width
-		testLine := word
-		if currentLine != "" {
-			testLine = currentLine + " " + word
-		}
-
-		if utf8.RuneCountInString(testLine) <= maxWidth {
-			// Word fits on current line
-			currentLine = testLine
-		} else {
-			// Word doesn't fit, add current line to result and start new one
-			if currentLine != "" {
-				result = append(result, currentLine)
-			}
-
-			// If the word itself is longer than maxWidth, split it
-			if utf8.RuneCountInString(word) > maxWidth {
-				// Split the word into chunks of maxWidth
-				for len(word) > 0 {
-					if utf8.RuneCountInString(word) <= maxWidth {
-						currentLine = word
-						word = ""
-					} else {
-						// Find a good split point (max width characters)
-						result = append(result, word[:maxWidth])
-						word = word[maxWidth:]
-					}
-				}
-			} else {
-				currentLine = word
-			}
-		}
-	}
-
-	// Add any remaining text
-	if currentLine != "" {
-		result = append(result, currentLine)
-	}
-
-	return result
-}
-
-// RapidFortTable creates a new Table with the given headers
-func RapidFortTable(headers []string) *Table {
-	// Auto-detect terminal width
-	termWidth := detectTerminalWidth()
-
-	table := &Table{
-		Headers:      headers,
-		Rows:         [][]string{},
-		Descriptions: make(map[int]string),
-		columnWidths: make([]int, len(headers)),
-		alignments:   make([]string, len(headers)),
-		consoleWidth: termWidth,
-		fillWidth:    false, // Change default to false - don't fill width unnecessarily
-		dimBorder:    false,
-		maxWidths:    make(map[int]int),
-	}
-
-	// Set default left alignment for all columns
-	for i := range headers {
-		table.alignments[i] = "left"
-	}
-
-	return table
-}
-
 // Render method with correct border management for merged descriptions
 func (t *Table) Render() string {
 	if t.group == nil {
@@ -622,7 +641,9 @@ func (t *Table) Render() string {
 			if line < len(headerLines[ci]) {
 				txt = headerLines[ci][line]
 			}
-			sb.WriteString(t.formatCellContent(txt, ci))
+			// Apply highlighting to header text if specified
+			highlightedTxt := t.getHighlightedText(txt, ci)
+			sb.WriteString(t.formatCellContent(highlightedTxt, ci))
 			sb.WriteString(t.getStyledChar(VLine))
 		}
 		sb.WriteString("\n")
@@ -773,6 +794,62 @@ func (t *Table) Render() string {
 	}
 
 	return sb.String()
+}
+
+// SyncColumnWidths ensures all tables in the group have consistent column widths
+func (g *TableGroup) SyncColumnWidths() {
+	if len(g.tables) == 0 {
+		return
+	}
+
+	// Initialize with the first table's column count
+	firstTable := g.tables[0]
+	colCount := len(firstTable.Headers)
+
+	// Ensure first table has columnWidths initialized
+	if len(firstTable.columnWidths) != colCount {
+		firstTable.columnWidths = make([]int, colCount)
+	}
+
+	// Initialize the group's column widths
+	g.columnWidths = make([]int, colCount)
+
+	// Find the maximum width for each column across all tables
+	for _, table := range g.tables {
+		// Ensure each table has columnWidths initialized
+		if len(table.columnWidths) != colCount {
+			table.columnWidths = make([]int, colCount)
+		}
+
+		table.calculateInitialColumnWidths()
+
+		for i := 0; i < colCount && i < len(table.columnWidths); i++ {
+			// Apply maximum column width constraint
+			width := table.columnWidths[i]
+			if width > maxColumnWidth {
+				width = maxColumnWidth
+			}
+
+			if width > g.columnWidths[i] {
+				// Check if this column has a max width constraint
+				if maxWidth, exists := table.maxWidths[i]; exists && width > maxWidth {
+					g.columnWidths[i] = maxWidth
+				} else {
+					g.columnWidths[i] = width
+				}
+			}
+		}
+	}
+
+	// Apply the group's column widths to all tables
+	for _, table := range g.tables {
+		for i := 0; i < colCount && i < len(table.columnWidths); i++ {
+			table.columnWidths[i] = g.columnWidths[i]
+		}
+
+		// Apply any final adjustments needed for console width
+		table.adjustColumnWidthsToFit()
+	}
 }
 
 // Render border from description to normal data row
