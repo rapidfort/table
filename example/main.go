@@ -12,7 +12,9 @@ func main() {
 
 	// ---- First Table: High Severity CVEs ----
 	headers1 := []string{"#", "CVE ID", "Severity", "Package", "Installed", "Fixed In"}
+
 	table1 := table.RapidFortTable(headers1)
+	table1.SetDimBorder(true)
 
 	// Set column alignments
 	table1.SetAlignment(0, "center") // Center the # column

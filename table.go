@@ -10,8 +10,12 @@ import (
 	"golang.org/x/term"
 )
 
-// Box drawing characters
 const (
+	// ANSI codes
+	DimStyleStart = "\x1b[2m"
+	DimStyleEnd   = "\x1b[0m"
+
+	// Box drawing characters
 	TopLeft     = "┌"
 	TopRight    = "┐"
 	BottomLeft  = "└"
@@ -36,6 +40,7 @@ type Table struct {
 	consoleWidth int      // Maximum width of the console
 	fillWidth    bool
 	maxWidths    map[int]int // Maximum width for specific columns
+	dimBorder    bool        // New field
 	// Reference to the table group this table belongs to (if any)
 	group *TableGroup
 }
@@ -51,6 +56,26 @@ func NewGroup() *TableGroup {
 	return &TableGroup{
 		tables: []*Table{},
 	}
+}
+
+func (t *Table) SetDimBorder(enabled bool) {
+	t.dimBorder = enabled
+}
+
+// getStyledChar returns a border character with optional dim styling
+func (t *Table) getStyledChar(char string) string {
+	if t.dimBorder {
+		return DimStyleStart + char + DimStyleEnd
+	}
+	return char
+}
+
+// getStyledHLine returns a horizontal line string with optional dim styling
+func (t *Table) getStyledHLine(width int) string {
+	if t.dimBorder {
+		return DimStyleStart + strings.Repeat(HLine, width) + DimStyleEnd
+	}
+	return strings.Repeat(HLine, width)
 }
 
 // Add adds a table to the group
@@ -343,40 +368,40 @@ func (t *Table) formatCellContent(content string, colIndex int) string {
 
 func (t *Table) renderTopBorder() string {
 	var sb strings.Builder
-	sb.WriteString(TopLeft)
+	sb.WriteString(t.getStyledChar(TopLeft))
 	for i, w := range t.columnWidths {
-		sb.WriteString(strings.Repeat(HLine, w+2))
+		sb.WriteString(t.getStyledHLine(w + 2))
 		if i < len(t.columnWidths)-1 {
-			sb.WriteString(TopT)
+			sb.WriteString(t.getStyledChar(TopT))
 		}
 	}
-	sb.WriteString(TopRight + "\n")
+	sb.WriteString(t.getStyledChar(TopRight) + "\n")
 	return sb.String()
 }
 
 func (t *Table) renderMiddleBorder() string {
 	var sb strings.Builder
-	sb.WriteString(LeftT)
+	sb.WriteString(t.getStyledChar(LeftT))
 	for i, w := range t.columnWidths {
-		sb.WriteString(strings.Repeat(HLine, w+2))
+		sb.WriteString(t.getStyledHLine(w + 2))
 		if i < len(t.columnWidths)-1 {
-			sb.WriteString(Cross)
+			sb.WriteString(t.getStyledChar(Cross))
 		}
 	}
-	sb.WriteString(RightT + "\n")
+	sb.WriteString(t.getStyledChar(RightT) + "\n")
 	return sb.String()
 }
 
 func (t *Table) renderBottomBorder() string {
 	var sb strings.Builder
-	sb.WriteString(BottomLeft)
+	sb.WriteString(t.getStyledChar(BottomLeft))
 	for i, w := range t.columnWidths {
-		sb.WriteString(strings.Repeat(HLine, w+2))
+		sb.WriteString(t.getStyledHLine(w + 2))
 		if i < len(t.columnWidths)-1 {
-			sb.WriteString(BottomT)
+			sb.WriteString(t.getStyledChar(BottomT))
 		}
 	}
-	sb.WriteString(BottomRight + "\n")
+	sb.WriteString(t.getStyledChar(BottomRight) + "\n")
 	return sb.String()
 }
 
@@ -544,6 +569,7 @@ func RapidFortTable(headers []string) *Table {
 		alignments:   make([]string, len(headers)),
 		consoleWidth: termWidth,
 		fillWidth:    true, // Enable fill width by default
+		dimBorder:    false,
 		maxWidths:    make(map[int]int),
 	}
 
@@ -578,14 +604,14 @@ func (t *Table) Render() string {
 		}
 	}
 	for line := 0; line < maxH; line++ {
-		sb.WriteString(VLine)
+		sb.WriteString(t.getStyledChar(VLine))
 		for ci := range t.Headers {
 			txt := ""
 			if line < len(headerLines[ci]) {
 				txt = headerLines[ci][line]
 			}
 			sb.WriteString(t.formatCellContent(txt, ci))
-			sb.WriteString(VLine)
+			sb.WriteString(t.getStyledChar(VLine))
 		}
 		sb.WriteString("\n")
 	}
@@ -606,14 +632,14 @@ func (t *Table) Render() string {
 		}
 
 		for line := 0; line < maxR; line++ {
-			sb.WriteString(VLine)
+			sb.WriteString(t.getStyledChar(VLine)) // Changed
 			for ci := range row {
 				txt := ""
 				if line < len(rowLines[ci]) {
 					txt = rowLines[ci][line]
 				}
 				sb.WriteString(t.formatCellContent(txt, ci))
-				sb.WriteString(VLine)
+				sb.WriteString(t.getStyledChar(VLine)) // Changed
 			}
 			sb.WriteString("\n")
 		}
@@ -639,30 +665,30 @@ func (t *Table) Render() string {
 			}
 
 			// Render the border that merges columns 2-n
-			sb.WriteString(VLine)
+			sb.WriteString(t.getStyledChar(VLine))
 			sb.WriteString(t.formatCellContent("", 0))
-			sb.WriteString(LeftT)
+			sb.WriteString(t.getStyledChar(LeftT))
 
 			// Draw border for all merged columns
 			for i := 1; i < len(t.columnWidths); i++ {
-				sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
+				sb.WriteString(t.getStyledHLine(t.columnWidths[i] + 2))
 				if i < len(t.columnWidths)-1 {
 					// Use BottomT to "absorb" the column separator
-					sb.WriteString(BottomT)
+					sb.WriteString(t.getStyledChar(BottomT))
 				}
 			}
-			sb.WriteString(RightT)
+			sb.WriteString(t.getStyledChar(RightT))
 			sb.WriteString("\n")
 
 			// Render notes section
-			sb.WriteString(VLine)
+			sb.WriteString(t.getStyledChar(VLine))
 			sb.WriteString(t.formatCellContent("", 0)) // Empty first column
-			sb.WriteString(VLine)
+			sb.WriteString(t.getStyledChar(VLine))
 			notesHeader := "[ RF Advisory ]"
 			paddingSpace := mergedWidth - utf8.RuneCountInString(notesHeader)
 			sb.WriteString(notesHeader)
 			sb.WriteString(strings.Repeat(" ", paddingSpace))
-			sb.WriteString(VLine)
+			sb.WriteString(t.getStyledChar(VLine))
 			sb.WriteString("\n")
 
 			// Render bullet points
@@ -673,14 +699,14 @@ func (t *Table) Render() string {
 					wrappedLines := t.smartSplitByWords(bulletLine, mergedWidth-4)
 
 					for _, wrappedLine := range wrappedLines {
-						sb.WriteString(VLine)
+						sb.WriteString(t.getStyledChar(VLine))
 						sb.WriteString(t.formatCellContent("", 0)) // Empty first column
-						sb.WriteString(VLine)
+						sb.WriteString(t.getStyledChar(VLine))
 
 						paddingSpace := mergedWidth - utf8.RuneCountInString(wrappedLine)
 						sb.WriteString(wrappedLine)
 						sb.WriteString(strings.Repeat(" ", paddingSpace))
-						sb.WriteString(VLine)
+						sb.WriteString(t.getStyledChar(VLine))
 						sb.WriteString("\n")
 					}
 				}
@@ -698,27 +724,27 @@ func (t *Table) Render() string {
 			// Render appropriate border after description
 			if isLastRow {
 				// Last row with description - properly render bottom border
-				sb.WriteString(BottomLeft)
-				sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
-				sb.WriteString(BottomT)
-				sb.WriteString(strings.Repeat(HLine, mergedWidth))
-				sb.WriteString(BottomRight)
+				sb.WriteString(t.getStyledChar(BottomLeft))             // Changed
+				sb.WriteString(t.getStyledHLine(t.columnWidths[0] + 2)) // Changed
+				sb.WriteString(t.getStyledChar(BottomT))                // Changed
+				sb.WriteString(t.getStyledHLine(mergedWidth))           // Changed
+				sb.WriteString(t.getStyledChar(BottomRight))            // Changed
 				sb.WriteString("\n")
 			} else if nextHasDesc {
 				sb.WriteString(t.renderDescToDataBorder())
 			} else {
 				// Next row is normal data - use Cross for normal separator
-				sb.WriteString(LeftT)
-				sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
-				sb.WriteString(Cross)
+				sb.WriteString(t.getStyledChar(LeftT))
+				sb.WriteString(t.getStyledHLine(t.columnWidths[0] + 2)) // Changed
+				sb.WriteString(t.getStyledChar(Cross))                  // Changed
 
 				for i := 1; i < len(t.columnWidths); i++ {
-					sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
+					sb.WriteString(t.getStyledHLine(t.columnWidths[i] + 2)) // Changed
 					if i < len(t.columnWidths)-1 {
-						sb.WriteString(Cross)
+						sb.WriteString(t.getStyledChar(Cross)) // Changed
 					}
 				}
-				sb.WriteString(RightT)
+				sb.WriteString(t.getStyledChar(RightT)) // Changed
 				sb.WriteString("\n")
 			}
 		} else {
@@ -739,17 +765,16 @@ func (t *Table) Render() string {
 
 // Render border from description to normal data row
 func (t *Table) renderDescToDataBorder() string {
-
 	var sb strings.Builder
-	sb.WriteString(LeftT)
-	sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
-	sb.WriteString(Cross)
+	sb.WriteString(t.getStyledChar(LeftT))                  // Changed
+	sb.WriteString(t.getStyledHLine(t.columnWidths[0] + 2)) // Changed
+	sb.WriteString(t.getStyledChar(Cross))                  // Changed
 	for i := 1; i < len(t.columnWidths); i++ {
-		sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
+		sb.WriteString(t.getStyledHLine(t.columnWidths[i] + 2)) // Changed
 		if i < len(t.columnWidths)-1 {
-			sb.WriteString(TopT)
+			sb.WriteString(t.getStyledChar(TopT)) // Changed
 		}
 	}
-	sb.WriteString(RightT + "\n")
+	sb.WriteString(t.getStyledChar(RightT) + "\n") // Changed
 	return sb.String()
 }
