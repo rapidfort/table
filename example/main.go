@@ -32,11 +32,11 @@ func main() {
 			description:        "Testing columns with random sizes and content",
 			useGroup:           false,
 			numTables:          1,
-			dimBorder:          true,
+			dimBorder:          false,
 			fillWidth:          false,
 			maxColumnWidths:    nil,
 			hasDescriptions:    true,
-			highlightedHeaders: []int{0, 1, 2, 3, 4, 5}, // All headers,
+			highlightedHeaders: nil,
 		},
 		{
 			title:              "Test Case 2: Grouped Tables with Sync",
@@ -239,7 +239,9 @@ func test3HeaderHighlighting(group *table.TableGroup, tc TestCase, rng *rand.Ran
 	tbl.AddDescription(0, "High demand item, consider restocking")
 	tbl.AddDescription(2, "Running low on inventory, order more from supplier")
 
-	fmt.Println("Headers [1], [3], and [4] are highlighted in bold:\n")
+	// FIXED: Removed \n from end of Println
+	fmt.Println("Headers [1], [3], and [4] are highlighted in bold:")
+	fmt.Println()
 	fmt.Println(tbl.Render())
 }
 
@@ -264,7 +266,9 @@ func test4MixedHighlightingAndStyling(group *table.TableGroup, tc TestCase, rng 
 	tbl.AddRow([]string{"East", "$200,000", "+25%", "$180,000", "Exceeds", "Outstanding results"})
 	tbl.AddDescription(1, "Performance review scheduled for next week")
 
-	fmt.Println("Testing mix of dim borders and highlighted headers [0], [2], and [5]:\n")
+	// FIXED: Removed \n from end of Println
+	fmt.Println("Testing mix of dim borders and highlighted headers [0], [2], and [5]:")
+	fmt.Println()
 	fmt.Println(tbl.Render())
 }
 
@@ -317,7 +321,9 @@ func test6AllHeadersHighlighted(group *table.TableGroup, tc TestCase, rng *rand.
 	tbl.AddRow([]string{"1", "2", "3", "4", "5", "6"})
 	tbl.AddRow([]string{"X", "Y", "Z", "A", "B", "C"})
 
-	fmt.Println("All headers highlighted:\n")
+	// FIXED: Removed \n from end of Println
+	fmt.Println("All headers highlighted:")
+	fmt.Println()
 	fmt.Println(tbl.Render())
 }
 
