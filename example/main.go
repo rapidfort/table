@@ -11,7 +11,7 @@ func main() {
 	group := table.NewGroup()
 
 	// ---- First Table: High Severity CVEs ----
-	headers1 := []string{"#", "CVE ID", "Severity", "Package", "Installed", "Fixed In"}
+	headers1 := []string{"#", "Vulnerability", "Severity", "Package", "Installed", "Fixed In"}
 
 	table1 := table.RapidFortTable(headers1)
 	table1.SetDimBorder(true)
@@ -31,7 +31,7 @@ func main() {
 	group.Add(table1)
 
 	// ---- Second Table: Medium Severity CVEs ----
-	headers2 := []string{"#", "CVE ID", "Severity", "Package", "Installed", "Fixed In"}
+	headers2 := []string{"#", "Vulnerability", "Severity", "Package", "Installed", "Fixed In"}
 	table2 := table.RapidFortTable(headers2)
 
 	// Set column alignments
