@@ -62,6 +62,11 @@ func NewGroup() *TableGroup {
 	}
 }
 
+// GetTables returns the tables in the group (public method for testing)
+func (g *TableGroup) GetTables() []*Table {
+	return g.tables
+}
+
 func (t *Table) SetDimBorder(enabled bool) {
 	t.dimBorder = enabled
 }
@@ -96,13 +101,23 @@ func (g *TableGroup) SyncColumnWidths() {
 
 	// Initialize with the first table's column count
 	firstTable := g.tables[0]
-	colCount := len(firstTable.columnWidths)
+	colCount := len(firstTable.Headers)
+
+	// Ensure first table has columnWidths initialized
+	if len(firstTable.columnWidths) != colCount {
+		firstTable.columnWidths = make([]int, colCount)
+	}
 
 	// Initialize the group's column widths
 	g.columnWidths = make([]int, colCount)
 
 	// Find the maximum width for each column across all tables
 	for _, table := range g.tables {
+		// Ensure each table has columnWidths initialized
+		if len(table.columnWidths) != colCount {
+			table.columnWidths = make([]int, colCount)
+		}
+
 		table.calculateInitialColumnWidths()
 
 		for i := 0; i < colCount && i < len(table.columnWidths); i++ {
@@ -175,6 +190,11 @@ func (t *Table) AddDescription(rowIndex int, description string) {
 
 // calculateInitialColumnWidths computes the initial width for each column
 func (t *Table) calculateInitialColumnWidths() {
+	// Ensure columnWidths is properly initialized
+	if len(t.columnWidths) != len(t.Headers) {
+		t.columnWidths = make([]int, len(t.Headers))
+	}
+
 	// Reset all column widths to 0 to start fresh
 	for i := range t.columnWidths {
 		t.columnWidths[i] = 0
