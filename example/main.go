@@ -17,12 +17,11 @@ func main() {
 	table1.SetDimBorder(true)
 
 	// Set column alignments
-	table1.SetAlignment(0, "center") // Center the # column
-	table1.SetAlignment(2, "center") // Center the Severity column
+	//table1.SetAlignment(0, "center") // Center the # column
 
 	// Add rows to the first table
-	table1.AddRow([]string{"1", "CVE-2023-48795", "HIGH", "openssh", "8.9p1-3ubuntu0.1", "8.9p1-3ubuntu0.3"})
-	table1.AddDescription(0, "Terrapin attack\nVulnerability in SSH protocol allowing chosen-ciphertext attacks against ChaCha20-Poly1305 and AES-GCM")
+	table1.AddRow([]string{"1", "CVE-2023-48795", "HIGH", "openssh/openssh/openssh/openssh/openssh/opensshopensshopensshopensshopensshopenssh", "8.9p1-3ubuntu0.1", "8.9p1-3ubuntu0.3"})
+	table1.AddDescription(0, "Added initialization to reset all column widths to 0 I understand. You want to prevent unnecessary stretching of columns when the content doesn't require the full width. Let me fix this by modifying the algorithm to only use the minimum required width for each column.")
 
 	table1.AddRow([]string{"2", "CVE-2023-4863", "HIGH", "libwebp", "1.0.4-3", "1.0.4-3.1"})
 	table1.AddDescription(1, "Heap buffer overflow in WebP library\nOut-of-bounds memory access in VP8L decoding")
@@ -35,14 +34,13 @@ func main() {
 	table2 := table.RapidFortTable(headers2)
 
 	// Set column alignments
-	table2.SetAlignment(0, "center") // Center the # column
-	table2.SetAlignment(2, "center") // Center the Severity column
+	//table2.SetAlignment(0, "center") // Center the # column
 
 	// Add rows to the second table
-	table2.AddRow([]string{"1", "CVE-2024-10041", "MEDIUM", "lles", "1.7.0-1", "1.7.0-2, 1.7.0-2, 1.7.0-2"})
+	table2.AddRow([]string{"1", "CVE-2024-10041", "Medium", "lles", "1.7.0-1", "1.7.0-2 1.7.0-2  1.7.0-2  1.7.0-2  1.7.0-2  1.7.0-2  1.7.0-2  1.7.0-2  1.7.0-2  1.7.0-2  1.7.0-2  1.7.0-2  1.7.0-2 "})
 	//table2.AddDescription(0, " Fixed in upstream 1.6.0Known issue in PAM's session module Fixed in upstream 1.6.0Known issue in PAM's session module Fixed in upstream 1.6.0\nKnown issue in PAM's session module Fixed in upstream 1.6.0\nKnown issue in PAM's session module ")
 
-	table2.AddRow([]string{"2", "CVE-2024-10963", "MEDIUM", "libc-bin", "2.39-0ubuntu8.4", "Pending"})
+	table2.AddRow([]string{"2", "CVE-2024-10963", "MEDIUM", "dd", "2.39-0ubuntu8.4", "Pending"})
 	//table2.AddDescription(1, "Patch cherry-picked\nCommit SHA: 940747f8")
 
 	// Add the second table to the group

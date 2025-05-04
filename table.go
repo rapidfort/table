@@ -28,6 +28,10 @@ const (
 	BottomT     = "┴"
 	Cross       = "┼"
 	padding     = 1
+
+	// Cell sizing constants
+	minTerminalWidth = 80
+	maxColumnWidth   = 30
 )
 
 // Table represents a table with borders and alignment control
@@ -102,12 +106,18 @@ func (g *TableGroup) SyncColumnWidths() {
 		table.calculateInitialColumnWidths()
 
 		for i := 0; i < colCount && i < len(table.columnWidths); i++ {
-			if table.columnWidths[i] > g.columnWidths[i] {
+			// Apply maximum column width constraint
+			width := table.columnWidths[i]
+			if width > maxColumnWidth {
+				width = maxColumnWidth
+			}
+
+			if width > g.columnWidths[i] {
 				// Check if this column has a max width constraint
-				if maxWidth, exists := table.maxWidths[i]; exists && table.columnWidths[i] > maxWidth {
+				if maxWidth, exists := table.maxWidths[i]; exists && width > maxWidth {
 					g.columnWidths[i] = maxWidth
 				} else {
-					g.columnWidths[i] = table.columnWidths[i]
+					g.columnWidths[i] = width
 				}
 			}
 		}
@@ -165,11 +175,19 @@ func (t *Table) AddDescription(rowIndex int, description string) {
 
 // calculateInitialColumnWidths computes the initial width for each column
 func (t *Table) calculateInitialColumnWidths() {
+	// Reset all column widths to 0 to start fresh
+	for i := range t.columnWidths {
+		t.columnWidths[i] = 0
+	}
+
+	// Calculate minimum width needed for headers
 	for i, header := range t.Headers {
 		if l := utf8.RuneCountInString(header); l > t.columnWidths[i] {
 			t.columnWidths[i] = l
 		}
 	}
+
+	// Calculate minimum width needed for each cell
 	for _, row := range t.Rows {
 		for i, cell := range row {
 			if i < len(t.columnWidths) {
@@ -182,7 +200,12 @@ func (t *Table) calculateInitialColumnWidths() {
 
 	// Apply max widths if specified
 	for i, width := range t.columnWidths {
-		if maxWidth, exists := t.maxWidths[i]; exists && width > maxWidth {
+		// Apply global max column width
+		if width > maxColumnWidth {
+			t.columnWidths[i] = maxColumnWidth
+		}
+		// Apply column-specific max width
+		if maxWidth, exists := t.maxWidths[i]; exists && t.columnWidths[i] > maxWidth {
 			t.columnWidths[i] = maxWidth
 		}
 	}
@@ -190,11 +213,13 @@ func (t *Table) calculateInitialColumnWidths() {
 
 // adjustColumnWidthsToFit adjusts column widths to fit the console
 func (t *Table) adjustColumnWidthsToFit() {
-	// --- a) SHRINK if too wide ---
-	total := 1
+	// Calculate current table width including borders and padding
+	total := 1 // Left border
 	for _, w := range t.columnWidths {
-		total += w + 2 + 1
+		total += w + 2 + 1 // Content + padding + separator
 	}
+
+	// If table exceeds terminal width, shrink columns
 	if total > t.consoleWidth {
 		excess := total - t.consoleWidth
 		for excess > 0 {
@@ -212,48 +237,8 @@ func (t *Table) adjustColumnWidthsToFit() {
 		}
 	}
 
-	// --- b) EXPAND if fillWidth is set and still under consoleWidth ---
-	if t.fillWidth {
-		total = 1
-		for _, w := range t.columnWidths {
-			total += w + 2 + 1
-		}
-		if total < t.consoleWidth {
-			extra := t.consoleWidth - total
-
-			// Count columns that can be expanded (exclude those with max width)
-			expandableCols := 0
-			for i := range t.columnWidths {
-				if maxWidth, exists := t.maxWidths[i]; !exists || t.columnWidths[i] < maxWidth {
-					expandableCols++
-				}
-			}
-
-			if expandableCols > 0 {
-				per := extra / expandableCols
-				rem := extra % expandableCols
-
-				expandedCount := 0
-				for i := range t.columnWidths {
-					// Skip columns that have reached their max width
-					if maxWidth, exists := t.maxWidths[i]; exists && t.columnWidths[i] >= maxWidth {
-						continue
-					}
-
-					t.columnWidths[i] += per
-					if expandedCount < rem {
-						t.columnWidths[i]++
-						expandedCount++
-					}
-
-					// Ensure we don't exceed max width after expansion
-					if maxWidth, exists := t.maxWidths[i]; exists && t.columnWidths[i] > maxWidth {
-						t.columnWidths[i] = maxWidth
-					}
-				}
-			}
-		}
-	}
+	// REMOVED: Do not expand columns to fill width when not needed
+	// The table will use only the minimum required width for each column
 }
 
 func (t *Table) smartSplitCellContent(content string, colIndex int) []string {
@@ -261,12 +246,16 @@ func (t *Table) smartSplitCellContent(content string, colIndex int) []string {
 	if utf8.RuneCountInString(content) <= maxWidth {
 		return []string{content}
 	}
-	if strings.Contains(content, "/") || strings.Contains(content, ".") {
-		return t.splitLongString(content, maxWidth)
-	}
+
+	// Try splitting by comma first
 	if strings.Contains(content, ",") {
 		return t.splitCommaSeparatedList(content, maxWidth)
 	}
+	// Then try slash
+	if strings.Contains(content, "/") || strings.Contains(content, ".") {
+		return t.splitLongString(content, maxWidth)
+	}
+	// Fall back to word splitting
 	return t.splitByWords(content, maxWidth)
 }
 
@@ -338,9 +327,12 @@ func (t *Table) splitByWords(content string, maxWidth int) []string {
 			line = w
 		}
 		if utf8.RuneCountInString(line) > maxWidth {
-			part := line[:maxWidth]
-			res = append(res, part)
-			line = line[maxWidth:]
+			// Handle case where single word is too long
+			for utf8.RuneCountInString(line) > maxWidth {
+				part := line[:maxWidth]
+				res = append(res, part)
+				line = line[maxWidth:]
+			}
 		}
 	}
 	if line != "" {
@@ -408,9 +400,9 @@ func (t *Table) renderBottomBorder() string {
 // detectTerminalWidth gets the current terminal width or returns a default
 func detectTerminalWidth() int {
 	width, _, err := term.GetSize(int(os.Stdout.Fd()))
-	if err != nil || width <= 0 {
-		// Default to 80 if we can't detect terminal width
-		return 80
+	if err != nil || width < minTerminalWidth {
+		// Use minimum terminal width if we can't detect or if detected width is too small
+		return minTerminalWidth
 	}
 	return width
 }
@@ -568,7 +560,7 @@ func RapidFortTable(headers []string) *Table {
 		columnWidths: make([]int, len(headers)),
 		alignments:   make([]string, len(headers)),
 		consoleWidth: termWidth,
-		fillWidth:    true, // Enable fill width by default
+		fillWidth:    false, // Change default to false - don't fill width unnecessarily
 		dimBorder:    false,
 		maxWidths:    make(map[int]int),
 	}
