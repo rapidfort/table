@@ -370,7 +370,7 @@ func test16MixedColorCellsAndDescriptions(group *table.TableGroup, tc TestCase, 
 	// Add coordinated colored descriptions
 	tbl.AddDescription(0, GREEN+"✓ All systems operational "+RESET+"| Last check: "+CYAN+"just now"+RESET)
 	tbl.AddDescription(1, YELLOW+"⚠ Service degradation "+RESET+"| Cause: "+YELLOW+"High traffic"+RESET+" | "+CYAN+"Monitoring"+RESET)
-	tbl.AddDescription(2, BG_RED+BRIGHT_WHITE+" CRITICAL SERVICE DOWN "+RESET+RED+" | Action: Failover to backup | ETA: 30min"+RESET)
+	tbl.AddDescription(2, BG_RED+BRIGHT_WHITE+" CRITICAL SERVICE DOWN "+RESET+" | Action: Failover to backup | ETA: 30min"+RESET)
 
 	fmt.Println("Coordinated cell and description colors:")
 	fmt.Println(tbl.Render())

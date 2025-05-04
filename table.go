@@ -67,36 +67,49 @@ func stripANSI(s string) string {
 }
 
 // extractWrappingANSI splits s into leading CSI prefix, trailing CSI suffix,
-// and the printable core in between.
 func extractWrappingANSI(s string) (prefix, suffix, core string) {
 	// 1) Peel off all leading CSI sequences
-	idx := 0
+	coreStart := 0
 	for {
-		loc := ansiRegexp.FindStringIndex(s[idx:])
+		// Find next ANSI match at the very start of the remaining string
+		loc := ansiRegexp.FindStringIndex(s[coreStart:])
 		if loc == nil || loc[0] != 0 {
 			break
 		}
-		// include that sequence
-		seq := s[idx : idx+loc[1]]
-		prefix += seq
-		idx += loc[1]
+		// Extend prefix to include that entire match
+		matchEnd := coreStart + loc[1]
+		prefix += s[coreStart:matchEnd]
+		coreStart = matchEnd
+		if coreStart >= len(s) {
+			// we've consumed the whole string
+			return prefix, suffix, ""
+		}
 	}
+
 	// 2) Peel off all trailing CSI sequences
-	end := len(s)
+	coreEnd := len(s)
 	for {
-		locs := ansiRegexp.FindAllStringIndex(s, -1)
+		// Find all matches in the substring up to coreEnd
+		locs := ansiRegexp.FindAllStringIndex(s[:coreEnd], -1)
 		if len(locs) == 0 {
 			break
 		}
 		last := locs[len(locs)-1]
-		if last[1] != end {
+		// If the last match ends exactly at coreEnd, it's truly a suffix
+		if last[1] == coreEnd {
+			suffix = s[last[0]:coreEnd] + suffix
+			coreEnd = last[0]
+			if coreEnd <= coreStart {
+				// nothing left in core
+				return prefix, suffix, ""
+			}
+		} else {
 			break
 		}
-		// that sequence runs right up to `end`
-		suffix = s[last[0]:last[1]] + suffix
-		end = last[0]
 	}
-	core = s[idx:end]
+
+	// 3) What's in between is the printable core
+	core = s[coreStart:coreEnd]
 	return
 }
 
