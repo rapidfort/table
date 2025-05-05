@@ -67,6 +67,7 @@ type TestCase struct {
 
 func main() {
 	simple()
+	simpleGroup()
 
 	// Initialize random source (modern way)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -484,4 +485,68 @@ func simple() {
 
 	// Render and print
 	fmt.Println(tbl.Render())
+}
+
+func simpleGroup() {
+	// pick your favourite ANSI colours
+	red := "\x1b[31m"
+	green := "\x1b[32m"
+	blue := "\x1b[34m"
+	bold := "\x1b[1m"
+	dim := "\x1b[2m"
+	reset := "\x1b[0m"
+
+	headers := []string{
+		bold + "ID" + reset,
+		bold + "Message" + reset,
+		bold + "Status" + reset,
+	}
+
+	// Table A
+	tA := table.RapidFortTable(headers)
+	tA.SetDimBorder(true)           // dim the box-drawing lines
+	tA.SetHeaderHighlighting(false) // we've hard-coloured headers already
+
+	// colour individual cells however you like:
+	tA.AddRow([]string{
+		red + "1" + reset,
+		green + "All systems go" + reset,
+		blue + "OK" + reset,
+	})
+
+	longDesc := dim + " This is a very long advisory note that “wraps” across multiple lines " +
+		"inside the table, dimmed so it doesn’t compete with your main data." + reset
+	tA.AddDescriptionWithTitle(
+		0,
+		bold+blue+"ADVISORY"+reset, // coloured description title
+		longDesc,
+	)
+
+	// Table B
+	tB := table.RapidFortTable(headers)
+	tB.SetDimBorder(true)
+
+	tB.AddRow([]string{
+		red + "2" + reset,
+		green + "Partial outage" + reset,
+		red + "FAIL" + reset,
+	})
+	tB.AddDescriptionWithTitle(
+		0,
+		bold+red+"ERROR"+reset,
+		dim+"Immediate attention required!"+reset,
+	)
+
+	// Put them in a group so columns line up
+	grp := table.NewGroup()
+	grp.Add(tA)
+	grp.Add(tB)
+	grp.SyncColumnWidths()
+
+	// print coloured titles
+	fmt.Println(bold + "=== Table A: System Health ===" + reset)
+	fmt.Println(tA.Render())
+
+	fmt.Println(bold + "=== Table B: Error States ===" + reset)
+	fmt.Println(tB.Render())
 }

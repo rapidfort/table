@@ -726,7 +726,11 @@ func (t *Table) Render() string {
 	}
 
 	if t.group == nil {
+		// standalone: pick the best widths for this table
 		t.calculateOptimalColumnWidths(t.consoleWidth)
+	} else {
+		// in‐group: Trust SyncColumnWidths() and just enforce console bounds
+		t.adjustColumnWidthsToFit()
 	}
 
 	var sb strings.Builder
