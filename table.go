@@ -708,6 +708,23 @@ func (t *Table) expandColumnsToFit(extraWidth int) {
 
 // Render method with correct border management for merged descriptions
 func (t *Table) Render() string {
+	// if stdout isn’t a real terminal, drop _all_ ANSI from rows & descriptions
+	if !t.supportANSI {
+		// strip ANSI from every table cell
+		for ri, row := range t.Rows {
+			for ci, cell := range row {
+				t.Rows[ri][ci] = stripANSI(cell)
+			}
+		}
+		// strip ANSI from every description & its title
+		for ri, desc := range t.Descriptions {
+			t.Descriptions[ri] = stripANSI(desc)
+			if title, ok := t.DescriptionTitles[ri]; ok {
+				t.DescriptionTitles[ri] = stripANSI(title)
+			}
+		}
+	}
+
 	if t.group == nil {
 		t.calculateOptimalColumnWidths(t.consoleWidth)
 	}
