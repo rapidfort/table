@@ -842,7 +842,7 @@ func (t *Table) Render() string {
 
 			// Description title (if any)
 			if title, ok := t.DescriptionTitles[ri]; ok && title != "" {
-				headerText := "[ " + title + " ]"
+				headerText := " [ " + title + " ]"
 				pad := mergedWidth - utf8.RuneCountInString(stripANSI(headerText))
 				if pad < 0 {
 					pad = 0
