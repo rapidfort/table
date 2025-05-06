@@ -67,7 +67,6 @@ type TestCase struct {
 
 func main() {
 	simple()
-	simpleGroup()
 
 	// Initialize random source (modern way)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -78,7 +77,7 @@ func main() {
 			description:        "Testing basic color coded descriptions",
 			useGroup:           false,
 			numTables:          1,
-			dimBorder:          false,
+			dimBorder:          true,
 			fillWidth:          false,
 			maxColumnWidths:    nil,
 			hasDescriptions:    true,
@@ -111,7 +110,7 @@ func main() {
 			description:        "Testing background colors and combinations",
 			useGroup:           false,
 			numTables:          1,
-			dimBorder:          false,
+			dimBorder:          true,
 			fillWidth:          false,
 			maxColumnWidths:    nil,
 			hasDescriptions:    true,
@@ -122,7 +121,7 @@ func main() {
 			description:        "Testing titled descriptions with colors",
 			useGroup:           false,
 			numTables:          1,
-			dimBorder:          false,
+			dimBorder:          true,
 			fillWidth:          false,
 			maxColumnWidths:    nil,
 			hasDescriptions:    true,
@@ -133,7 +132,7 @@ func main() {
 			description:        "Testing color coordination between cells and descriptions",
 			useGroup:           false,
 			numTables:          1,
-			dimBorder:          false,
+			dimBorder:          true,
 			fillWidth:          false,
 			maxColumnWidths:    nil,
 			hasDescriptions:    true,
@@ -144,7 +143,7 @@ func main() {
 			description:        "Testing text wrapping with colored content",
 			useGroup:           false,
 			numTables:          1,
-			dimBorder:          false,
+			dimBorder:          true,
 			fillWidth:          false,
 			maxColumnWidths:    nil,
 			hasDescriptions:    true,
@@ -166,7 +165,7 @@ func main() {
 			description:        "Testing nested color codes and resets",
 			useGroup:           false,
 			numTables:          1,
-			dimBorder:          false,
+			dimBorder:          true,
 			fillWidth:          false,
 			maxColumnWidths:    nil,
 			hasDescriptions:    true,
@@ -192,6 +191,8 @@ func main() {
 			fmt.Println("\n" + strings.Repeat("=", 80) + "\n")
 		}
 	}
+	simpleGroup()
+
 }
 
 func runTestCase(tc TestCase, rng *rand.Rand) {
@@ -504,8 +505,8 @@ func simpleGroup() {
 
 	// Table A
 	tA := table.RapidFortTable(headers)
-	tA.SetDimBorder(true)           // dim the box-drawing lines
-	tA.SetHeaderHighlighting(false) // we've hard-coloured headers already
+	//tA.SetDimBorder(true)           // dim the box-drawing lines
+	//tA.SetHeaderHighlighting(false) // we've hard-coloured headers already
 
 	// colour individual cells however you like:
 	tA.AddRow([]string{
@@ -524,7 +525,19 @@ func simpleGroup() {
 
 	// Table B
 	tB := table.RapidFortTable(headers)
-	tB.SetDimBorder(true)
+	//tB.SetDimBorder(true)
+
+	tB.AddRow([]string{
+		//red + "1" + reset,
+		"1",
+		green + "Partial outage" + reset,
+		red + "FAIL" + reset,
+	})
+	tB.AddDescriptionWithTitle(
+		0,
+		bold+red+"ERROR"+reset,
+		dim+"Immediate attention required!"+reset,
+	)
 
 	tB.AddRow([]string{
 		red + "2" + reset,
@@ -532,7 +545,7 @@ func simpleGroup() {
 		red + "FAIL" + reset,
 	})
 	tB.AddDescriptionWithTitle(
-		0,
+		1,
 		bold+red+"ERROR"+reset,
 		dim+"Immediate attention required!"+reset,
 	)

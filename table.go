@@ -13,7 +13,9 @@ import (
 
 const (
 	// ANSI codes
-	DimStyleStart = "\x1b[38;5;242m" // Most visible gray
+	//DimStyleStart = "\x1b[38;5;242m"
+	// faint + darker gray for very subdued borders
+	DimStyleStart = "\x1b[2m\x1b[38;5;240m"
 
 	DimStyleEnd    = "\x1b[0m"
 	BoldStyleStart = "\x1b[1m" // Bold style for highlighting
@@ -988,39 +990,20 @@ func (g *TableGroup) SyncColumnWidths() {
 	}
 }
 
-// Render border from description to normal data row
-func (t *Table) renderDataToDescBorder() string {
-	var sb strings.Builder
-	// ─ under col 0
-	sb.WriteString(LeftT)
-	sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
-	// cross into merged area
-	sb.WriteString(Cross)
-	// merged run for cols[1:]
-	merged := 0
-	for i := 1; i < len(t.columnWidths); i++ {
-		merged += t.columnWidths[i] + 2
-	}
-	sb.WriteString(strings.Repeat(HLine, merged))
-	sb.WriteString(RightT + "\n")
-	return sb.String()
-}
-
-// renderDescToDataBorder draws the border after a description before the next data row.
+// renderDescToDataBorder draws the border after a description before the next data row,
+// using ANSI-aware dimmed characters.
 func (t *Table) renderDescToDataBorder() string {
 	var sb strings.Builder
-	// ─ under col 0
-	sb.WriteString(LeftT)
-	sb.WriteString(strings.Repeat(HLine, t.columnWidths[0]+2))
-	// cross
-	sb.WriteString(Cross)
-	// merged run with TopT separators
+	sb.WriteString(t.getStyledChar(LeftT))
+	sb.WriteString(t.getStyledHLine(t.columnWidths[0] + 2))
+	sb.WriteString(t.getStyledChar(Cross))
 	for i := 1; i < len(t.columnWidths); i++ {
-		sb.WriteString(strings.Repeat(HLine, t.columnWidths[i]+2))
+		sb.WriteString(t.getStyledHLine(t.columnWidths[i] + 2))
 		if i < len(t.columnWidths)-1 {
-			sb.WriteString(TopT)
+			sb.WriteString(t.getStyledChar(TopT))
 		}
 	}
-	sb.WriteString(RightT + "\n")
+	sb.WriteString(t.getStyledChar(RightT))
+	sb.WriteString("\n")
 	return sb.String()
 }
