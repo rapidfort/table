@@ -309,7 +309,9 @@ func (t *Table) calculateInitialColumnWidths() {
 
 	// Calculate minimum width needed for headers
 	for i, header := range t.Headers {
-		if l := utf8.RuneCountInString(header); l > t.columnWidths[i] {
+		// headers have no ANSI, but let's strip anyway for consistency
+		vis := stripANSI(header)
+		if l := utf8.RuneCountInString(vis); l > t.columnWidths[i] {
 			t.columnWidths[i] = l
 		}
 	}
@@ -317,10 +319,13 @@ func (t *Table) calculateInitialColumnWidths() {
 	// Calculate minimum width needed for each cell
 	for _, row := range t.Rows {
 		for i, cell := range row {
-			if i < len(t.columnWidths) {
-				if l := utf8.RuneCountInString(cell); l > t.columnWidths[i] {
-					t.columnWidths[i] = l
-				}
+			if i >= len(t.columnWidths) {
+				continue
+			}
+			// strip out color codes before measuring
+			vis := stripANSI(cell)
+			if l := utf8.RuneCountInString(vis); l > t.columnWidths[i] {
+				t.columnWidths[i] = l
 			}
 		}
 	}
