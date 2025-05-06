@@ -812,12 +812,12 @@ func (t *Table) Render() string {
 		if desc, ok := t.Descriptions[ri]; ok {
 			// Split into bullet points
 			bps := strings.Split(desc, "\n")
-			if len(bps) == 1 && strings.Contains(desc, ",") {
-				bps = strings.Split(desc, ",")
-				for i := range bps {
-					bps[i] = strings.TrimSpace(bps[i])
-				}
-			}
+			// if len(bps) == 1 && strings.Contains(desc, ",") {
+			// 	bps = strings.Split(desc, ",")
+			// 	for i := range bps {
+			// 		bps[i] = strings.TrimSpace(bps[i])
+			// 	}
+			// }
 
 			// Compute merged width of columns 2..n
 			mergedWidth := 0
@@ -861,7 +861,7 @@ func (t *Table) Render() string {
 				if bp == "" {
 					continue
 				}
-				prefix := "     "
+				prefix := "   • "
 				textWidth := mergedWidth - utf8.RuneCountInString(prefix) - 2
 				if textWidth < 0 {
 					textWidth = 0
