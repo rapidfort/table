@@ -861,7 +861,7 @@ func (t *Table) Render() string {
 				if bp == "" {
 					continue
 				}
-				prefix := "   • "
+				prefix := "     "
 				textWidth := mergedWidth - utf8.RuneCountInString(prefix) - 2
 				if textWidth < 0 {
 					textWidth = 0
