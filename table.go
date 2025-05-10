@@ -44,8 +44,8 @@ const (
 type Table struct {
 	Headers            []string
 	Rows               [][]string
-	Descriptions       map[int]string // row index -> description
-	DescriptionTitles  map[int]string // row index -> title (optional)
+	Descriptions       map[int][]string // row index -> description
+	DescriptionTitles  map[int][]string // row index -> title (optional)
 	columnWidths       []int
 	alignments         []string // "left", "right", "center" for each column
 	consoleWidth       int      // Maximum width of the console
@@ -252,15 +252,24 @@ func (t *Table) AddRow(row []string) {
 // AddDescription adds a description for a specific row
 func (t *Table) AddDescription(rowIndex int, description string) {
 	if rowIndex >= 0 && rowIndex < len(t.Rows) {
-		t.Descriptions[rowIndex] = description
+		if _, ok := t.Descriptions[rowIndex]; !ok {
+			t.Descriptions[rowIndex] = []string{}
+			t.DescriptionTitles[rowIndex] = []string{}
+		}
+		t.Descriptions[rowIndex] = append(t.Descriptions[rowIndex], description)
+		t.DescriptionTitles[rowIndex] = append(t.DescriptionTitles[rowIndex], "")
 	}
 }
 
 // AddDescriptionWithTitle adds a description with a title for a specific row
 func (t *Table) AddDescriptionWithTitle(rowIndex int, title string, description string) {
 	if rowIndex >= 0 && rowIndex < len(t.Rows) {
-		t.Descriptions[rowIndex] = description
-		t.DescriptionTitles[rowIndex] = title
+		if _, ok := t.Descriptions[rowIndex]; !ok {
+			t.Descriptions[rowIndex] = []string{}
+			t.DescriptionTitles[rowIndex] = []string{}
+		}
+		t.Descriptions[rowIndex] = append(t.Descriptions[rowIndex], description)
+		t.DescriptionTitles[rowIndex] = append(t.DescriptionTitles[rowIndex], title)
 	}
 }
 
@@ -546,8 +555,8 @@ func RapidFortTable(headers []string) *Table {
 	table := &Table{
 		Headers:            headers,
 		Rows:               [][]string{},
-		Descriptions:       make(map[int]string),
-		DescriptionTitles:  make(map[int]string), // Initialize the new field
+		Descriptions:       make(map[int][]string),
+		DescriptionTitles:  make(map[int][]string), // Initialize the new field
 		columnWidths:       make([]int, len(headers)),
 		alignments:         make([]string, len(headers)),
 		consoleWidth:       termWidth,
@@ -714,7 +723,7 @@ func (t *Table) expandColumnsToFit(extraWidth int) {
 }
 
 func (t *Table) Render() string {
-	// 1) If stdout isn’t a real terminal, drop ALL ANSI and use minimal widths
+	// 1) If stdout isn't a real terminal, drop ALL ANSI and use minimal widths
 	if !t.supportANSI {
 		// Disable ANSI-based decorations
 		t.dimBorder = false
@@ -731,10 +740,14 @@ func (t *Table) Render() string {
 			}
 		}
 		// Strip ANSI from every description & title
-		for ri, desc := range t.Descriptions {
-			t.Descriptions[ri] = stripANSI(desc)
-			if title, ok := t.DescriptionTitles[ri]; ok {
-				t.DescriptionTitles[ri] = stripANSI(title)
+		for ri, descs := range t.Descriptions {
+			for i, desc := range descs {
+				t.Descriptions[ri][i] = stripANSI(desc)
+			}
+			if titles, ok := t.DescriptionTitles[ri]; ok {
+				for i, title := range titles {
+					t.DescriptionTitles[ri][i] = stripANSI(title)
+				}
 			}
 		}
 		// Compute the absolute minimal column widths
@@ -808,18 +821,9 @@ func (t *Table) Render() string {
 			sb.WriteString("\n")
 		}
 
-		// Optional description block
-		if desc, ok := t.Descriptions[ri]; ok {
-			// Split into bullet points
-			bps := strings.Split(desc, "\n")
-			// if len(bps) == 1 && strings.Contains(desc, ",") {
-			// 	bps = strings.Split(desc, ",")
-			// 	for i := range bps {
-			// 		bps[i] = strings.TrimSpace(bps[i])
-			// 	}
-			// }
-
-			// Compute merged width of columns 2..n
+		// Optional description blocks
+		if descs, ok := t.Descriptions[ri]; ok && len(descs) > 0 {
+			// Compute merged width of columns 2..n (used by all descriptions)
 			mergedWidth := 0
 			for i := 1; i < len(t.columnWidths); i++ {
 				mergedWidth += t.columnWidths[i] + 2
@@ -828,65 +832,82 @@ func (t *Table) Render() string {
 				}
 			}
 
-			// Top border of description block
-			sb.WriteString(t.getStyledChar(VLine))
-			sb.WriteString(t.formatCellContent("", 0))
-			sb.WriteString(t.getStyledChar(LeftT))
-			for i := 1; i < len(t.columnWidths); i++ {
-				sb.WriteString(t.getStyledHLine(t.columnWidths[i] + 2))
-				if i < len(t.columnWidths)-1 {
-					sb.WriteString(t.getStyledChar(BottomT))
-				}
-			}
-			sb.WriteString(t.getStyledChar(RightT) + "\n")
-
-			// Description title (if any)
-			if title, ok := t.DescriptionTitles[ri]; ok && title != "" {
-				headerText := " [ " + title + " ]"
-				pad := mergedWidth - utf8.RuneCountInString(stripANSI(headerText))
-				if pad < 0 {
-					pad = 0
-				}
-				sb.WriteString(t.getStyledChar(VLine))
-				sb.WriteString(t.formatCellContent("", 0))
-				sb.WriteString(t.getStyledChar(VLine))
-				sb.WriteString(headerText)
-				sb.WriteString(strings.Repeat(" ", pad))
-				sb.WriteString(t.getStyledChar(VLine) + "\n")
-			}
-
-			// Bullet lines
-			for _, bp := range bps {
-				bp = strings.TrimSpace(bp)
-				if bp == "" {
-					continue
-				}
-				prefix := "   • "
-				textWidth := mergedWidth - utf8.RuneCountInString(prefix) - 2
-				if textWidth < 0 {
-					textWidth = 0
-				}
-				wrapped := t.smartSplitByWords(bp, textWidth)
-
-				for i, wline := range wrapped {
+			// Process each description for this row
+			for di, desc := range descs {
+				// Top border of description block (first one) or separator between descriptions
+				if di == 0 {
+					// First description - top border
 					sb.WriteString(t.getStyledChar(VLine))
 					sb.WriteString(t.formatCellContent("", 0))
-					sb.WriteString(t.getStyledChar(VLine))
-
-					var disp string
-					if i == 0 {
-						disp = prefix + wline
-					} else {
-						indent := strings.Repeat(" ", utf8.RuneCountInString(prefix))
-						disp = indent + wline
+					sb.WriteString(t.getStyledChar(LeftT))
+					for i := 1; i < len(t.columnWidths); i++ {
+						sb.WriteString(t.getStyledHLine(t.columnWidths[i] + 2))
+						if i < len(t.columnWidths)-1 {
+							sb.WriteString(t.getStyledChar(BottomT))
+						}
 					}
-					pad := mergedWidth - utf8.RuneCountInString(stripANSI(disp))
+					sb.WriteString(t.getStyledChar(RightT) + "\n")
+				} else {
+					// Separator between descriptions
+					sb.WriteString(t.getStyledChar(VLine))
+					sb.WriteString(t.formatCellContent("", 0))
+					sb.WriteString(t.getStyledChar(LeftT))
+					// For inter-description separators, we don't want column divisions
+					sb.WriteString(t.getStyledHLine(mergedWidth))
+					sb.WriteString(t.getStyledChar(RightT) + "\n")
+				}
+
+				// Description title (if any)
+				if titles, ok := t.DescriptionTitles[ri]; ok && di < len(titles) && titles[di] != "" {
+					headerText := " [ " + titles[di] + " ]"
+					pad := mergedWidth - utf8.RuneCountInString(stripANSI(headerText))
 					if pad < 0 {
 						pad = 0
 					}
-					sb.WriteString(disp)
+					sb.WriteString(t.getStyledChar(VLine))
+					sb.WriteString(t.formatCellContent("", 0))
+					sb.WriteString(t.getStyledChar(VLine))
+					sb.WriteString(headerText)
 					sb.WriteString(strings.Repeat(" ", pad))
 					sb.WriteString(t.getStyledChar(VLine) + "\n")
+				}
+
+				// Split into bullet points
+				bps := strings.Split(desc, "\n")
+
+				// Bullet lines
+				for _, bp := range bps {
+					bp = strings.TrimSpace(bp)
+					if bp == "" {
+						continue
+					}
+					prefix := "   • "
+					textWidth := mergedWidth - utf8.RuneCountInString(prefix) - 2
+					if textWidth < 0 {
+						textWidth = 0
+					}
+					wrapped := t.smartSplitByWords(bp, textWidth)
+
+					for i, wline := range wrapped {
+						sb.WriteString(t.getStyledChar(VLine))
+						sb.WriteString(t.formatCellContent("", 0))
+						sb.WriteString(t.getStyledChar(VLine))
+
+						var disp string
+						if i == 0 {
+							disp = prefix + wline
+						} else {
+							indent := strings.Repeat(" ", utf8.RuneCountInString(prefix))
+							disp = indent + wline
+						}
+						pad := mergedWidth - utf8.RuneCountInString(stripANSI(disp))
+						if pad < 0 {
+							pad = 0
+						}
+						sb.WriteString(disp)
+						sb.WriteString(strings.Repeat(" ", pad))
+						sb.WriteString(t.getStyledChar(VLine) + "\n")
+					}
 				}
 			}
 
@@ -894,7 +915,7 @@ func (t *Table) Render() string {
 			isLast := ri == len(t.Rows)-1
 			nextHasDesc := !isLast && (func() bool {
 				_, ok2 := t.Descriptions[ri+1]
-				return ok2
+				return ok2 && len(t.Descriptions[ri+1]) > 0
 			})()
 
 			if isLast {
@@ -919,7 +940,6 @@ func (t *Table) Render() string {
 				}
 				sb.WriteString(t.getStyledChar(RightT) + "\n")
 			}
-
 		} else if ri < len(t.Rows)-1 {
 			// No description, normal middle border
 			sb.WriteString(t.renderMiddleBorder())
@@ -927,7 +947,7 @@ func (t *Table) Render() string {
 	}
 
 	// Bottom border if last row had no description
-	if _, hasDesc := t.Descriptions[len(t.Rows)-1]; !hasDesc {
+	if descs, hasDesc := t.Descriptions[len(t.Rows)-1]; !hasDesc || len(descs) == 0 {
 		sb.WriteString(t.renderBottomBorder())
 	}
 

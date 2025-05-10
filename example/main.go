@@ -119,7 +119,7 @@ func simpleGroup() {
 		longDesc,
 	)
 	// add a second advisory note
-	tA.AddDescription(0, green+"Additional advisory: maintenance scheduled"+reset)
+	tA.AddDescription(0, green+"Additional advisory: maintenance scheduled this is long & forward moving"+reset)
 
 	// Table B
 	tB := table.RapidFortTable(headers)
