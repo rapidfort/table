@@ -56,8 +56,15 @@ type Table struct {
 	borderless         bool        // Flag to disable borders
 	highlightHeaders   bool        // Always highlight headers
 	highlightedHeaders []int       // Indices of headers to highlight
+	rowCountEnabled    bool        // Flag to enable row count
 	// Reference to the table group this table belongs to (if any)
+
 	group *TableGroup
+}
+
+func (t *Table) EnableRowCount(enabled bool) *Table {
+	t.rowCountEnabled = enabled
+	return t
 }
 
 // ansiRegexp matches any CSI sequence (e.g. "\x1b[31m", "\x1b[0K", etc.)
@@ -547,8 +554,15 @@ func detectTerminalWidth() int {
 	return width
 }
 
-// RapidFortTable creates a new Table with the given headers
 func RapidFortTable(headers []string) *Table {
+	// Create a copy of the headers slice to avoid modifying the original
+	headersCopy := make([]string, len(headers))
+	copy(headersCopy, headers)
+
+	return NewTable(headersCopy)
+}
+
+func NewTable(headers []string) *Table {
 	// Auto-detect terminal width
 	termWidth := detectTerminalWidth()
 
@@ -566,6 +580,7 @@ func RapidFortTable(headers []string) *Table {
 		maxWidths:          make(map[int]int),
 		highlightHeaders:   true,    // Always highlight headers by default
 		highlightedHeaders: []int{}, // Initialize the highlighted headers slice
+		rowCountEnabled:    false,
 	}
 
 	if !table.supportANSI {
@@ -583,48 +598,89 @@ func RapidFortTable(headers []string) *Table {
 
 // smartSplitByWords splits text by words to fit within maxWidth
 func (t *Table) smartSplitByWords(text string, maxWidth int) []string {
-	words := strings.Fields(text)
+	// Strip ANSI for width calculation, but keep original for output
+	textVisible := stripANSI(text)
+
+	// If the text already fits, no need to split
+	if utf8.RuneCountInString(textVisible) <= maxWidth {
+		return []string{text}
+	}
+
+	// Extract ANSI prefix/suffix if any
+	prefix, suffix, visibleContent := extractWrappingANSI(text)
+
+	// Split the visible content by spaces
+	words := strings.Fields(visibleContent)
+	if len(words) == 0 {
+		return []string{text}
+	}
+
 	var result []string
 	currentLine := ""
+	currentLineVisible := ""
 
 	for _, word := range words {
-		// Check if adding this word would exceed the max width
-		testLine := word
-		if currentLine != "" {
-			testLine = currentLine + " " + word
-		}
+		// Extract any ANSI codes in this word
+		wordPrefix, wordSuffix, wordVisible := extractWrappingANSI(word)
 
-		if utf8.RuneCountInString(testLine) <= maxWidth {
+		// Calculate visible length for the test line
+		testLineVisible := currentLineVisible
+		if testLineVisible != "" {
+			testLineVisible += " "
+		}
+		testLineVisible += wordVisible
+
+		if utf8.RuneCountInString(testLineVisible) <= maxWidth {
 			// Word fits on current line
-			currentLine = testLine
-		} else {
-			// Word doesn't fit, add current line to result and start new one
 			if currentLine != "" {
-				result = append(result, currentLine)
+				currentLine += " "
+			}
+			currentLine += wordPrefix + wordVisible + wordSuffix
+			currentLineVisible = testLineVisible
+		} else {
+			// Word doesn't fit, start new line
+			if currentLine != "" {
+				result = append(result, prefix+currentLine+suffix)
 			}
 
-			// If the word itself is longer than maxWidth, split it
-			if utf8.RuneCountInString(word) > maxWidth {
-				// Split the word into chunks of maxWidth
-				for len(word) > 0 {
-					if utf8.RuneCountInString(word) <= maxWidth {
-						currentLine = word
-						word = ""
+			// If the word itself is too long, split it
+			if utf8.RuneCountInString(wordVisible) > maxWidth {
+				// Create chunks of the word that fit
+				var chunks []string
+				remaining := wordVisible
+				for utf8.RuneCountInString(remaining) > 0 {
+					chunkSize := maxWidth
+					if utf8.RuneCountInString(remaining) <= chunkSize {
+						chunks = append(chunks, remaining)
+						break
+					}
+
+					chunk := remaining[:chunkSize]
+					chunks = append(chunks, chunk)
+					remaining = remaining[chunkSize:]
+				}
+
+				// Add chunks as separate lines
+				for i, chunk := range chunks {
+					if i == 0 {
+						result = append(result, prefix+wordPrefix+chunk+wordSuffix+suffix)
 					} else {
-						// Find a good split point (max width characters)
-						result = append(result, word[:maxWidth])
-						word = word[maxWidth:]
+						result = append(result, prefix+chunk+suffix)
 					}
 				}
+
+				currentLine = ""
+				currentLineVisible = ""
 			} else {
-				currentLine = word
+				currentLine = wordPrefix + wordVisible + wordSuffix
+				currentLineVisible = wordVisible
 			}
 		}
 	}
 
 	// Add any remaining text
 	if currentLine != "" {
-		result = append(result, currentLine)
+		result = append(result, prefix+currentLine+suffix)
 	}
 
 	return result
@@ -722,8 +778,56 @@ func (t *Table) expandColumnsToFit(extraWidth int) {
 	}
 }
 
+// Function to prepare the table with row counting
+func (t *Table) prepareWithRowCount() *Table {
+	if !t.rowCountEnabled {
+		return t
+	}
+
+	// Create a new table with row counts
+	newHeaders := append([]string{"#"}, t.Headers...)
+	newTable := NewTable(newHeaders)
+
+	// Copy properties from original table
+	newTable.Descriptions = t.Descriptions
+	newTable.DescriptionTitles = t.DescriptionTitles
+	newTable.consoleWidth = t.consoleWidth
+	newTable.fillWidth = t.fillWidth
+	newTable.dimBorder = t.dimBorder
+	newTable.supportANSI = t.supportANSI
+	newTable.borderless = t.borderless
+	newTable.highlightHeaders = t.highlightHeaders
+	newTable.highlightedHeaders = t.highlightedHeaders
+	newTable.group = t.group
+	newTable.rowCountEnabled = false // Prevent infinite recursion
+
+	// Copy alignments
+	newTable.alignments = make([]string, len(newHeaders))
+	newTable.alignments[0] = "right" // Right-align row numbers
+	for i := 0; i < len(t.alignments); i++ {
+		newTable.alignments[i+1] = t.alignments[i]
+	}
+
+	// Copy max widths
+	for col, width := range t.maxWidths {
+		newTable.maxWidths[col+1] = width
+	}
+
+	// Add rows with row numbers
+	for i, row := range t.Rows {
+		rowNum := fmt.Sprintf("%d", i+1)
+		newTable.AddRow(append([]string{rowNum}, row...))
+	}
+
+	return newTable
+}
+
 func (t *Table) Render() string {
 	// 1) If stdout isn't a real terminal, drop ALL ANSI and use minimal widths
+	if t.rowCountEnabled {
+		return t.prepareWithRowCount().Render()
+	}
+
 	if !t.supportANSI {
 		// Disable ANSI-based decorations
 		t.dimBorder = false
@@ -881,7 +985,7 @@ func (t *Table) Render() string {
 					if bp == "" {
 						continue
 					}
-					prefix := "   • "
+					prefix := " "
 					textWidth := mergedWidth - utf8.RuneCountInString(prefix) - 2
 					if textWidth < 0 {
 						textWidth = 0

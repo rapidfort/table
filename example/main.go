@@ -65,9 +65,7 @@ type TestCase struct {
 	highlightedHeaders []int
 }
 
-func main() {
-	simple()
-	simpleGroup()
+func testCases() {
 
 	// Initialize random source (modern way)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -410,19 +408,26 @@ func test18RainbowStyledDescriptions(group *table.TableGroup, tc TestCase, rng *
 	tbl.AddRow([]string{"Build", "In Progress", "75%", "Good", "4/5"})
 	tbl.AddRow([]string{"Test", "Failed", "45%", "Poor", "2/5"})
 
-	// Rainbow gradient descriptions
 	rainbowText := func(text string) string {
 		colors := []string{RED, YELLOW, GREEN, CYAN, BLUE, MAGENTA}
+		chunkSize := 3 // Color 3 chars at a time
 		result := ""
-		for i, char := range text {
-			result += colors[i%len(colors)] + string(char) + RESET
+
+		for i := 0; i < len(text); i += chunkSize {
+			end := i + chunkSize
+			if end > len(text) {
+				end = len(text)
+			}
+			colorIndex := (i / chunkSize) % len(colors)
+			result += colors[colorIndex] + text[i:end] + RESET
 		}
+
 		return result
 	}
 
 	tbl.AddDescription(0, rainbowText("Deployment completed successfully across all regions"))
-	tbl.AddDescription(1, YELLOW+"Build "+GREEN+"progressing "+CYAN+"smoothly"+BLUE+" with "+MAGENTA+"no "+RED+"issues"+RESET)
-	tbl.AddDescription(2, RED+"Test failures detected in: "+YELLOW+"auth module"+GREEN+", API "+CYAN+"endpoints"+BLUE+", database "+MAGENTA+"connections"+RESET)
+	//tbl.AddDescription(1, YELLOW+"Build "+GREEN+"progressing "+CYAN+"smoothly"+BLUE+" with "+MAGENTA+"no "+RED+"issues"+RESET)
+	//tbl.AddDescription(2, RED+"Test failures detected in: "+YELLOW+"auth module"+GREEN+", API "+CYAN+"endpoints"+BLUE+", database "+MAGENTA+"connections"+RESET)
 
 	fmt.Println("Rainbow styled descriptions:")
 	fmt.Println(tbl.Render())
@@ -475,13 +480,18 @@ func test20ColorAccessibility(group *table.TableGroup, tc TestCase, rng *rand.Ra
 func simple() {
 	// Create a table
 	tbl := table.RapidFortTable([]string{"Name", "Age", "City"})
+	tbl.EnableRowCount(true) // Turn on row counting
 
 	// Add rows
 	tbl.AddRow([]string{"Alice", "30", "New York"})
 	tbl.AddRow([]string{"Bob", "25", "San Francisco"})
 
 	// Add description to a row
-	tbl.AddDescription(0, "Special customer discount applied")
+	tbl.AddDescription(0, "#1 Special customer discount applied")
+	tbl.AddDescription(0, "#2 Special customer discount applied")
+	tbl.AddDescription(1, "#3 Special customer discount applied")
+	tbl.AddDescription(1, "#4 Special customer discount applied")
+	tbl.AddDescription(1, "#5 Special customer discount applied")
 
 	// Render and print
 	fmt.Println(tbl.Render())
@@ -514,7 +524,7 @@ func simpleGroup() {
 		blue + "OK" + reset,
 	})
 
-	longDesc := dim + " This is a very long advisory note that “wraps” across multiple lines " +
+	longDesc := dim + "This is a very long advisory note that “wraps” across multiple lines " +
 		"inside the table, dimmed so it doesn’t compete with your main data." + reset
 	tA.AddDescriptionWithTitle(
 		0,
@@ -549,4 +559,15 @@ func simpleGroup() {
 
 	fmt.Println(bold + "=== Table B: Error States ===" + reset)
 	fmt.Println(tB.Render())
+}
+
+func main() {
+	// Run all test cases
+	testCases()
+
+	// Run simple example
+	// simple()
+
+	// // Run simple group example
+	// simpleGroup()
 }
