@@ -489,7 +489,7 @@ func simple() {
 	// Add description to a row
 	tbl.AddDescription(0, "#1 Special customer discount applied")
 	tbl.AddDescription(0, "#2 Special customer discount applied")
-	tbl.AddDescription(1, "#3 Special customer discount applied")
+	tbl.AddDescriptionWithTitle(1, "XXX", "#3 Special customer discount applied")
 	tbl.AddDescription(1, "#4 Special customer discount applied")
 	tbl.AddDescription(1, "#5 Special customer discount applied")
 
@@ -566,8 +566,8 @@ func main() {
 	testCases()
 
 	// Run simple example
-	// simple()
+	simple()
 
 	// // Run simple group example
-	// simpleGroup()
+	simpleGroup()
 }
