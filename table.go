@@ -963,11 +963,12 @@ func (t *Table) Render() string {
 
 				// Description title (if any)
 				if titles, ok := t.DescriptionTitles[ri]; ok && di < len(titles) && titles[di] != "" {
-					headerText := " [ " + titles[di] + " ]"
+					headerText := " [ " + BoldStyleStart + titles[di] + BoldStyleEnd + " ]"
 					pad := mergedWidth - utf8.RuneCountInString(stripANSI(headerText))
 					if pad < 0 {
 						pad = 0
 					}
+
 					sb.WriteString(t.getStyledChar(VLine))
 					sb.WriteString(t.formatCellContent("", 0))
 					sb.WriteString(t.getStyledChar(VLine))
